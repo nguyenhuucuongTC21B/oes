@@ -34,6 +34,24 @@ function ensureReady() {
   return readyPromise;
 }
 
-// Express app là một handler (req, res) hợp lệ cho Vercel Node runtime.
 const app = createApp(ensureReady);
-module.exports = app;
+
+/**
+ * Export MỘT HÀM HANDLER được ĐỊNH NGHĨA NGAY TRONG FILE NÀY.
+ *
+ * ⚠️ KHÔNG được `module.exports = app` (app được tạo ra từ src/app.js):
+ * runtime Node của Vercel tự truy vết export về module nơi giá trị được tạo ra
+ * — src/app.js exports một OBJECT `{ createApp }` chứ không phải hàm, nên
+ * Vercel từ chối với lỗi:
+ *   "Invalid export found in module /var/task/src/app.js.
+ *    The default export must be a function or server."
+ * → process exit 1, mọi request trả 500.
+ * Hàm bọc dưới đây được định nghĩa tại chỗ nên việc kiểm tra export luôn pass.
+ */
+async function handler(req, res) {
+  return app(req, res);
+}
+
+module.exports = handler;
+// Tương thích ESM-interop: nếu runtime tra `exports.default` vẫn thấy handler.
+module.exports.default = handler;
