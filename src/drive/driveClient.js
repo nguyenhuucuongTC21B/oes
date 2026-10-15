@@ -52,17 +52,17 @@ function buildDriveClient() {
 
   if (!raw && !keyFile) {
     const e = new Error('Chưa khai báo GOOGLE_SERVICE_ACCOUNT_JSON (chuỗi Base64 của file key Service Account).');
-    e.advice = 'Lấy key theo README mục 3 (Bước 1–7), sau đó khai báo biến trên Render: Dashboard → Service → Environment → Add Environment Variable → Save Changes → Manual Deploy.';
+    e.advice = 'Lấy key theo README mục 3 (Bước 1–7), sau đó khai báo biến trên Vercel: Project → Settings → Environment Variables → Add New → Save, rồi Redeploy (Deployments → nút ⋯ → Redeploy).';
     return { error: e };
   }
   if (!fid) {
     const e = new Error('Chưa khai báo GOOGLE_DRIVE_FOLDER_ID (ID thư mục Drive chứa 3 file JSON).');
-    e.advice = 'Mở thư mục trên drive.google.com, copy ĐOẠN SAU /folders/ trên thanh địa chỉ, khai báo biến trên Render rồi Manual Deploy.';
+    e.advice = 'Mở thư mục trên drive.google.com, copy ĐOẠN SAU /folders/ trên thanh địa chỉ, khai báo biến trên Vercel rồi Redeploy (Deployments → nút ⋯ → Redeploy).';
     return { error: e };
   }
   if (fid.includes('/folders/')) {
     const e = new Error('GOOGLE_DRIVE_FOLDER_ID đang chứa cả URL thay vì chỉ ID.');
-    e.advice = `Bạn đã dán nguyên URL. Chỉ giữ lại đoạn sau /folders/ (hiện tại: "${fid}"). Sửa biến trên Render rồi Manual Deploy.`;
+    e.advice = `Bạn đã dán nguyên URL. Chỉ giữ lại đoạn sau /folders/ (hiện tại: "${fid}"). Sửa biến trên Vercel rồi Redeploy.`;
     return { error: e };
   }
 
@@ -112,7 +112,7 @@ function init() {
       `[drive] KHONG THE ket noi Google Drive: ${built.error.message}` +
         (built.error.advice ? ` | ${built.error.advice}` : '')
     );
-    console.warn('[drive] He thong chay o CHE DO CUC BO ./data (KHONG ben vinh tren Render).');
+    console.warn('[drive] He thong chay o CHE DO CUC BO (KHONG ben vinh tren Vercel).');
     return mode;
   }
   drive = built.drive;

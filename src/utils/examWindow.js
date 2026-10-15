@@ -15,7 +15,7 @@
  *   chỉ có openAt  → trước openAt là "scheduled", sau đó là "open" mãi.
  *   chỉ có closeAt → trước closeAt là "open", sau đó là "closed".
  *
- * Lưu ý múi giờ: server (Render) chạy UTC nên toàn bộ so sánh dùng Date UTC.
+ * Lưu ý múi giờ: server (Vercel Function) chạy UTC nên toàn bộ so sánh dùng Date UTC.
  * Hiển thị cho người dùng luôn quy đổi về Giờ Việt Nam (GMT+7).
  */
 'use strict';

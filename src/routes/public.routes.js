@@ -1,6 +1,6 @@
 /**
  * public.routes.js — API công khai (không cần đăng nhập): thống kê tổng quan
- * cho trang chủ + health check cho Render.
+ * cho trang chủ + health check cho Vercel.
  */
 'use strict';
 
@@ -25,7 +25,7 @@ router.get('/stats', (req, res) => {
   });
 });
 
-/** Health check (Render gọi định kỳ) + trạng thái đồng bộ Drive. */
+/** Health check (giám sát định kỳ) + trạng thái đồng bộ Drive. */
 router.get('/health', (req, res) => {
   res.json({
     ok: true,

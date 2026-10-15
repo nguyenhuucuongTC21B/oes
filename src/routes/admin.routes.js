@@ -119,7 +119,7 @@ router.post('/exams', async (req, res, next) => {
     if (!check.ok) return res.status(400).json({ message: check.message });
 
     // ---- Chống tạo trùng: cùng tên + hạng mục tạo trong 2 phút gần nhất ----
-    // (Người dùng thường bấm "Lưu" nhiều lần khi Render khởi động lạnh chậm.)
+    // (Người dùng thường bấm "Lưu" nhiều lần khi Vercel cold start chậm.)
     const twoMinutesAgo = Date.now() - 2 * 60 * 1000;
     const dup = dataStore
       .get('exams')
@@ -246,8 +246,8 @@ router.post('/seed-sample-exams', async (req, res, next) => {
 
 /**
  * Đồng bộ NGAY toàn bộ dữ liệu đang chờ lên Google Drive.
- * Dùng khi admin muốn chắc chắn dữ liệu đã an toàn trước khi server nghỉ
- * (Render free tier tắt service sau 15 phút không có request).
+ * Dùng khi admin muốn chắc chắn dữ liệu đã an toàn
+ * (Vercel serverless có thể giải phóng instance bất kỳ lúc nào).
  */
 router.post('/sync', async (req, res, next) => {
   try {

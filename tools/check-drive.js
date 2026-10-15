@@ -124,13 +124,13 @@ function generateConfig(keyPath) {
   const b64Path = path.join(ROOT, 'key.base64.txt');
   fs.writeFileSync(b64Path, b64, 'utf8');
   console.log(`\n${c.ok('✓')} Đã mã hóa Base64 và lưu vào file: ${path.relative(ROOT, b64Path)}`);
-  console.log('  (Chuỗi này dùng dán vào biến GOOGLE_SERVICE_ACCOUNT_JSON trên Render — mở file, copy toàn bộ.)');
+  console.log('  (Chuỗi này dùng dán vào biến GOOGLE_SERVICE_ACCOUNT_JSON trên Vercel — mở file, copy toàn bộ.)');
 
   // Sinh / cập nhật .env
   const envPath = path.join(ROOT, '.env');
   const block = [
     `# Sinh tự động bởi tools/check-drive.js lúc ${new Date().toLocaleString('vi-VN')}`,
-    `# Khi deploy Render: dán GIÁ TRỊ 3 biến dưới đây vào Environment của Web Service.`,
+    `# Khi deploy Vercel: dán GIÁ TRỊ 3 biến dưới đây vào Settings → Environment Variables.`,
     `PORT=3000`,
     `SESSION_SECRET=${crypto.randomBytes(48).toString('hex')}`,
     `GOOGLE_SERVICE_ACCOUNT_JSON=${b64}`,
@@ -292,8 +292,8 @@ async function liveCheck() {
   }
 
   console.log(`
-${c.bold('TÓM TẮT — Cấu hình đúng hết, sẵn sàng deploy lên Render:')}
-  Copy 3 biến trong .env sang mục Environment của Render Web Service:
+${c.bold('TÓM TẮT — Cấu hình đúng hết, sẵn sàng deploy lên Vercel:')}
+  Copy 3 biến trong .env sang Settings → Environment Variables của Vercel Project:
     ${c.info('SESSION_SECRET  /  GOOGLE_SERVICE_ACCOUNT_JSON  /  GOOGLE_DRIVE_FOLDER_ID')}
   (SESSION_SECRET đã được sinh sẵn trong .env nếu bạn dùng chế độ sinh cấu hình.)
 `);

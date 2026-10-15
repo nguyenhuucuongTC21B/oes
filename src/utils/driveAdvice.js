@@ -49,7 +49,7 @@ function adviceForError(err) {
   if (Number(err && err.code) === 404 || msg.includes('file not found') || msg.includes('notfound')) {
     return 'KHÔNG TÌM THẤY THƯ MỤC trên Drive. GOOGLE_DRIVE_FOLDER_ID sai (copy dư URL, dư khoảng trắng, ' +
       'hoặc thư mục đã bị xóa). Mở thư mục trên drive.google.com, copy ĐOẠN SAU /folders/ trên thanh địa chỉ ' +
-      '(ví dụ URL .../folders/1AbC-xYz thì Folder ID là 1AbC-xYz), sửa biến trên Render rồi Manual Deploy.';
+      '(ví dụ URL .../folders/1AbC-xYz thì Folder ID là 1AbC-xYz), sửa biến trên Vercel (Settings → Environment Variables) rồi Redeploy: Deployments → nút ⋯ → Redeploy.';
   }
   if (Number(err && err.code) === 403 && (msg.includes('permission') || msg.includes('insufficient'))) {
     return 'BỊ TỪ CHỐI QUYỀN — thư mục chưa được Share cho Service Account (hoặc chỉ share quyền Viewer). ' +
@@ -64,19 +64,19 @@ function adviceForError(err) {
   }
   if (msg.includes('err_ossl') || msg.includes('decoder routines') || msg.includes('pem_read') || msg.includes('no start line') || msg.includes('bad decrypt')) {
     return 'PRIVATE_KEY KHÔNG ĐỌC ĐƯỢC: chuỗi key bị hỏng khi copy/encode Base64 (thiếu đầu/cuối, đứt dòng, dán thiếu). ' +
-      'Tạo lại cấu hình: node tools/check-drive.js "đường-dẫn-file-key.json" rồi copy TRỌN VẸN giá trị GOOGLE_SERVICE_ACCOUNT_JSON mới vào Render (| Set-Clipboard trên Windows, | pbcopy trên macOS).';
+      'Tạo lại cấu hình: node tools/check-drive.js "đường-dẫn-file-key.json" rồi copy TRỌN VẸN giá trị GOOGLE_SERVICE_ACCOUNT_JSON mới vào Vercel (| Set-Clipboard trên Windows, | pbcopy trên macOS), rồi Redeploy.';
   }
   if (msg.includes('invalid_grant') || msg.includes('invalid_client') || msg.includes('jwt') || msg.includes('malformed')) {
     return 'KEY SERVICE ACCOUNT KHÔNG HỢP LỆ / BỊ LỖI COPY. Chuỗi Base64 có thể bị thiếu, đứt dòng hoặc dán nhầm. ' +
       'Tạo lại key (README mục 3, Bước 4–7) rồi chạy: node tools/check-drive.js "đường-dẫn-file-key.json" ' +
-      'để sinh lại GOOGLE_SERVICE_ACCOUNT_JSON, cập nhật biến trên Render và Manual Deploy.';
+      'để sinh lại GOOGLE_SERVICE_ACCOUNT_JSON, cập nhật biến trên Vercel (Settings → Environment Variables) và Redeploy.';
   }
   if (Number(err && err.code) === 401) {
     return 'LỖI 401 XÁC THỰC: GOOGLE_SERVICE_ACCOUNT_JSON không khớp với project đã bật Drive API. ' +
       'Kiểm tra lại chuỗi Base64 / file key có đúng project không, rồi cập nhật lại biến môi trường.';
   }
   if (msg.includes('enotfound') || msg.includes('etimedout') || msg.includes('econnrefused') || msg.includes('fetch failed')) {
-    return 'LỖI MẠNG: server không kết nối được tới Google. Nếu lỗi lặp lại liên tục, kiểm tra network của dịch vụ Render (thường tự hồi phục sau ít phút).';
+    return 'LỖI MẠNG: server không kết nối được tới Google. Nếu lỗi lặp lại liên tục, kiểm tra network của Vercel Function (thường tự hồi phục sau ít phút).';
   }
   return null;
 }

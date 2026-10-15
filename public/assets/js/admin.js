@@ -502,8 +502,8 @@ async function seedSampleExams() {
 }
 
 /* ==================== TRẠNG THÁI ĐỒNG BỘ GOOGLE DRIVE ====================
- * Render free tier TẮT service sau 15 phút không có request: toàn bộ dữ liệu
- * chỉ nằm trong RAM + đĩa tạm sẽ MẤT nếu chưa kịp ghi lên Google Drive.
+ * Vercel serverless: mỗi instance bị giải phóng bất kỳ lúc nào — dữ liệu chưa
+ * ghi kịp lên Google Drive sẽ MẤT khi instance kết thúc.
  * Banner này để admin LUÔN biết dữ liệu đã an toàn hay chưa. */
 async function checkSyncStatus() {
   const banner = document.getElementById('sync-banner');
@@ -530,9 +530,9 @@ async function checkSyncStatus() {
       <span class="text-xl">🚨</span>
       <div class="flex-1 min-w-0 text-sm text-red-800">
         <b>CHẾ ĐỘ CỤC BỘ — dữ liệu KHÔNG bền vững!</b> Máy chủ chưa kết nối được Google Drive,
-        mọi đề thi / điểm số chỉ nằm trong bộ nhớ tạm và <b>sẽ mất khi Render ngủ sau 15 phút</b>.
+        mọi đề thi / điểm số chỉ nằm trong bộ nhớ tạm và <b>sẽ mất khi Function bị giải phóng</b>.
         Hãy khai báo biến <code class="bg-red-100 px-1 rounded">GOOGLE_SERVICE_ACCOUNT_JSON</code> và
-        <code class="bg-red-100 px-1 rounded">GOOGLE_DRIVE_FOLDER_ID</code> trên Render (README mục 3), sau đó tạo lại đề thi.
+        <code class="bg-red-100 px-1 rounded">GOOGLE_DRIVE_FOLDER_ID</code> trên Vercel (README mục 3), sau đó tạo lại đề thi.
         <div class="mt-2">Bấm "Kiểm tra Drive ngay" để biết chính xác máy chủ đang thiếu/sai gì.</div>
       </div>
       <button onclick="runDriveCheck()" class="bg-red-600 hover:bg-red-700 text-white font-bold text-xs px-4 py-2 rounded-lg transition shrink-0">🔍 Kiểm tra Drive ngay</button>`;

@@ -88,7 +88,7 @@ function newId(prefix) {
 /* --------------- TOKEN PHIÊN THI (attempt token — stateless) --------------- */
 /**
  * Trên Vercel serverless KHÔNG có RAM chung giữa các request, nên "lượt làm
- * bài" không thể lưu trong Map như bản Render. Thay bằng attempt token:
+ * bài" không thể lưu trong Map như bản server thường. Thay bằng attempt token:
  * một token HMAC chứa { cccd, examId, startedAt } — client giữ và gửi lại
  * khi vào lại/nộp bài. Server chỉ cần kiểm tra chữ ký → không thể sửa startedAt.
  */

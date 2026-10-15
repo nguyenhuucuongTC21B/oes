@@ -518,6 +518,21 @@ vercel --prod              # deploy bản chính thức
 
 ## 7. Câu hỏi nhanh (Vercel edition)
 
+**Log Vercel báo "Invalid export found in module ... The default export must be a function or server" và site 500?**
+Đây là lỗi của bản OES trước 15/10/2026 (đã sửa): `api/index.js` từng export thẳng Express app
+được tạo từ `src/app.js` — runtime Node mới của Vercel truy vết export về nơi định nghĩa,
+thấy `src/app.js` exports object `{ createApp }` nên từ chối. Bản mới export một hàm
+`handler(req, res)` định nghĩa ngay trong `api/index.js` → hết lỗi. Nếu bạn tự chỉnh code,
+nhớ giữ nguyên quy tắc: **export của `api/index.js` phải là hàm được định nghĩa ngay trong
+file đó, không re-export module khác**.
+
+**Log nhắc "SESSION_SECRET chua duoc cau hinh"?** Bạn chưa khai báo đủ biến môi trường trên
+Vercel. Vào Project → Settings → Environment Variables khai báo đủ 3 biến bắt buộc
+(`GOOGLE_SERVICE_ACCOUNT_JSON`, `GOOGLE_DRIVE_FOLDER_ID`, `ADMIN_CCCDS`) + khuyến nghị mạnh
+`SESSION_SECRET` (chuỗi ngẫu nhiên dài bất kỳ) — xong **nhớ Redeploy** (Deployments → nút ⋯ →
+Redeploy) vì env mới chỉ áp dụng cho deployment mới. Thiếu `SESSION_SECRET`: mỗi lần instance
+mới thay thế, mọi thí sinh đang đăng nhập bị đẩy ra phải đăng nhập lại (không mất điểm).
+
 **Ra 1 đề nhưng danh sách hiện 3 đề giống nhau?** Do bấm nút "Lưu đề thi" nhiều lần khi
 request đầu tiên còn chờ (cold start 1–3 giây, tưởng là không ăn nên bấm tiếp). OES đã:
 (1) khóa nút và hiện "Đang lưu..." khi đang gửi; (2) server từ chối tạo đề trùng tên +
