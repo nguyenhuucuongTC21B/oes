@@ -10,6 +10,13 @@ const driveClient = require('../drive/driveClient');
 
 const router = express.Router();
 
+/**
+ * Nhãn phiên bản build — dùng để xác minh code mới đã được deploy:
+ * mở <domain>/api/health, nếu thấy "build": "OES-VERCEL-R3" tức bản sửa lỗi
+ * "Invalid export / FUNCTION_INVOCATION_FAILED" đã chạy thật trên Vercel.
+ */
+const BUILD_TAG = 'OES-VERCEL-R3';
+
 /** Số liệu tuyên truyền chỉ chứa con số tổng hợp, không chứa thông tin cá nhân. */
 router.get('/stats', (req, res) => {
   const results = dataStore.get('results');
@@ -29,6 +36,7 @@ router.get('/stats', (req, res) => {
 router.get('/health', (req, res) => {
   res.json({
     ok: true,
+    build: BUILD_TAG,
     mode: driveClient.getMode(),
     uptimeSeconds: Math.floor(process.uptime()),
     sync: dataStore.getSyncInfo(),

@@ -1,0 +1,47 @@
+================================================================
+ CẬP-NHẬT-LÊN-GITHUB.txt — OES bản R3 (15/10/2026)
+ Bản sửa lỗi 500 FUNCTION_INVOCATION_FAILED / Invalid export
+================================================================
+
+NGUYÊN NHÂN LỖI:
+  File src/app.js còn kết thúc bằng  module.exports = { createApp };
+  Runtime Vercel mới truy vết export tới module này, thấy OBJECT
+  (không phải hàm) → từ chối ở MỖI lần instance lạnh khởi động
+  → 500 FUNCTION_INVOCATION_FAILED lúc có lúc không.
+
+----------------------------------------------------------------
+ CÁCH A — CHUẨN NHẤT (upload toàn bộ, khuyên dùng)
+----------------------------------------------------------------
+1. Giải nén oes-vercel.zip ra máy.
+2. Mở repo GitHub của bạn → nút "Add file" → "Upload files".
+3. Kéo thả TOÀN BỘ file + thư mục vừa giải nén (kể cả thư mục api,
+   src, public, tools — GitHub tự ghi đè file trùng tên).
+4. Gõ commit, ví dụ: "OES R3 - fix Vercel export" → "Commit changes".
+5. Chờ Vercel tự deploy ~1 phút (mã commit mới phải KHÁC mã cũ).
+6. XÁC MINH: mở https://<domain>/api/health
+   → thấy "build": "OES-VERCEL-R3" là bản mới đã chạy thật.
+
+----------------------------------------------------------------
+ CÁCH B — FIX NHANH (sửa đúng 1 file, đã kiểm chứng 4/4 test)
+----------------------------------------------------------------
+1. Mở file src/app.js trên GitHub → bấm biểu tượng cây bút (Edit).
+2. Xóa dòng cuối cùng:  module.exports = { createApp };
+3. Thay bằng 3 dòng:
+     module.exports = createApp;
+     module.exports.createApp = createApp;
+     module.exports.default = createApp;
+4. Commit changes → chờ Vercel deploy → mở lại trang chủ.
+
+----------------------------------------------------------------
+ NẾU VẪN LỖI SAU KHI DEPLOY
+----------------------------------------------------------------
+- Vercel Dashboard → deployment mới nhất → tab "Runtime Logs".
+- Copy dòng ERROR ĐẦU TIÊN (hoặc dùng:
+  vercel logs --request-id <request-id>) và gửi lại cho hỗ trợ.
+
+GHI CHÚ MÔI TRƯỜNG (Settings → Environment Variables):
+  GOOGLE_SERVICE_ACCOUNT_JSON  : chuỗi Base64 của file key (1 dòng dài)
+  GOOGLE_DRIVE_FOLDER_ID       : CHỈ lấy ID sau /folders/
+  ADMIN_CCCDS                  : các CCCD admin, cách nhau bởi dấu phẩy
+  SESSION_SECRET               : chuỗi ngẫu nhiên dài bất kỳ
+  → Sửa xong biến môi trường phải Redeploy mới có hiệu lực.

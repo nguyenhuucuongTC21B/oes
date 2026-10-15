@@ -481,6 +481,20 @@ Mở `http://localhost:3000`:
 Từ giờ **mỗi lần `git push` là Vercel tự deploy phiên bản mới** — cập nhật đề/bản vá
 chỉ mất 1 phút, không cần restart gì.
 
+#### Cập nhật bản vá vào repo ĐÃ có sẵn (quan trọng khi sửa lỗi deploy)
+
+Redeploy trên Vercel chỉ build lại **code đang nằm trên GitHub** — nó không thể thay code
+bằng cách nào khác. Vì vậy khi nhận bộ zip OES mới (ví dụ bản sửa lỗi "Invalid export /
+FUNCTION_INVOCATION_FAILED"), phải đưa file mới lên repo trước:
+
+1. Giải nén `oes-vercel.zip` ra máy.
+2. Mở repo GitHub của bạn (vd `nguyenhuucuongTC21B/oes`) → **Add file → Upload files**.
+3. Kéo thả **toàn bộ file + thư mục** trong bản giải nén vào ô upload (GitHub tự ghi đè
+   file trùng tên; nếu bị chặn vì "exceeds 100 files" thì upload theo từng đợt nhỏ).
+4. Gõ nội dung commit (vd `Update OES R3 - fix Vercel export`) → **Commit changes**.
+5. Vercel tự deploy commit mới — kiểm tra mã commit trong deployment phải **khác** mã cũ.
+6. Mở `<domain>/api/health` — thấy `"build": "OES-VERCEL-R3"` là bản vá đã chạy thật.
+
 ### Cách B — Vercel CLI (không cần GitHub)
 
 ```bash
@@ -518,13 +532,36 @@ vercel --prod              # deploy bản chính thức
 
 ## 7. Câu hỏi nhanh (Vercel edition)
 
+**Cách xác minh bản code mới đã chạy thật trên Vercel?** Mở `<domain>/api/health` — nếu JSON
+chứa `"build": "OES-VERCEL-R3"` tức bản sửa lỗi "Invalid export / FUNCTION_INVOCATION_FAILED"
+đã được deploy thành công. Nếu thấy 404, JSON khác, hoặc không có trường `build` → Vercel
+vẫn đang chạy **code cũ trong repo GitHub** (xem câu tiếp theo).
+
+**Vercel vẫn báo lỗi cũ dù tôi đã Redeploy — sửa thế nào?** Redeploy chỉ build lại **code
+hiện có trên GitHub**, không thay được code. Bạn phải đưa file mới lên repo: tải
+`oes-vercel.zip` mới nhất → giải nén → mở repo GitHub → **Add file → Upload files** → kéo thả
+**toàn bộ file/thư mục** trong bản giải nén (ghi đè lên file cũ) → gõ Commit changes → bấm
+**Commit changes**. Vercel tự deploy commit mới (kiểm tra: mã commit trên Vercel phải **khác**
+cũ). Nếu vẫn lỗi sau khi commit mới đã deploy: vào **Dashboard → project → deployment mới
+nhất → tab Runtime Logs**, tìm dòng `ERROR` đầu tiên (kèm Request ID nếu có) và gửi nội dung đó.
+
 **Log Vercel báo "Invalid export found in module ... The default export must be a function or server" và site 500?**
-Đây là lỗi của bản OES trước 15/10/2026 (đã sửa): `api/index.js` từng export thẳng Express app
-được tạo từ `src/app.js` — runtime Node mới của Vercel truy vết export về nơi định nghĩa,
-thấy `src/app.js` exports object `{ createApp }` nên từ chối. Bản mới export một hàm
-`handler(req, res)` định nghĩa ngay trong `api/index.js` → hết lỗi. Nếu bạn tự chỉnh code,
-nhớ giữ nguyên quy tắc: **export của `api/index.js` phải là hàm được định nghĩa ngay trong
-file đó, không re-export module khác**.
+Đây là lỗi của bản OES trước 15/10/2026 (đã sửa 3 lớp): (1) `api/index.js` giờ export hàm
+`handler(req, res)` định nghĩa ngay trong file; (2) `src/app.js` giờ export thẳng hàm
+`createApp` (không còn object `{ createApp }`) — module bị runtime "truy vết" đến luôn pass;
+(3) `vercel.json` dùng cấu hình `builds` + `routes` truyền thống — Vercel không còn tự nhận
+dạng "backend framework" nên hết các cảnh báo internal rewrites. Kèm cơ chế phòng thủ: kể cả
+entrypoint cũ re-export thẳng `src/app.js` làm handler, `createApp` vẫn tự nhận `(req, res)`
+và chạy được. Nếu bạn tự chỉnh code, nhớ giữ nguyên quy tắc: **export của mọi file trong
+`api/` phải là hàm được định nghĩa ngay trong file đó, không re-export module khác**.
+
+**Truy cập ra "500 FUNCTION_INVOCATION_FAILED" (có Request ID kiểu hkg1::...)?** Nghĩa là
+function bị crash lúc chạy. Thứ tự kiểm tra: (1) mở `<domain>/api/health` — không có
+`"build": "OES-VERCEL-R3"` ⇒ repo chưa có code mới, cập nhật lại theo câu trên; (2) đã có
+marker mà lỗi ở request cụ thể ⇒ vào Dashboard → deployment mới nhất → **Runtime Logs**, lọc
+theo Request ID đó, đọc dòng lỗi đầu tiên: nếu là lỗi khởi tạo Drive (thiếu/misent env var)
+→ sửa Environment Variables rồi Redeploy; bản code mới cũng trả trang JSON chẩn đoán
+`OES_INITIALIZATION_FAILED` kèm `message` chi tiết thay vì 500 trắng hoàn toàn.
 
 **Log nhắc "SESSION_SECRET chua duoc cau hinh"?** Bạn chưa khai báo đủ biến môi trường trên
 Vercel. Vào Project → Settings → Environment Variables khai báo đủ 3 biến bắt buộc

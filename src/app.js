@@ -10,6 +10,7 @@
 
 const path = require('path');
 const express = require('express');
+const config = require('./config');
 const dataStore = require('./store/dataStore');
 
 const publicRoutes = require('./routes/public.routes');
@@ -17,11 +18,32 @@ const authRoutes = require('./routes/auth.routes');
 const examRoutes = require('./routes/exam.routes');
 const adminRoutes = require('./routes/admin.routes');
 
+/* ----------------------------------------------------------------------
+ * LAZY BOOT DỰ PHÒNG — dùng khi entrypoint KHÔNG truyền ensureReady
+ * (ví dụ code cũ re-export thẳng module này làm handler trên Vercel).
+ * dataStore.init() tự bảo vệ (initPromise) nên gọi trùng cũng vô hại.
+ * ---------------------------------------------------------------------- */
+let defaultReadyPromise = null;
+function defaultEnsureReady() {
+  if (!defaultReadyPromise) {
+    defaultReadyPromise = (async () => {
+      console.log('[oes] Lazy boot du phong (entrypoint khong truyen ensureReady)...');
+      require('./drive/driveClient').init();
+      await dataStore.init();
+      console.log('[oes] Instance du phong san sang nhan request.');
+    })().catch((err) => {
+      defaultReadyPromise = null; // Cho phép request sau thử lại.
+      throw err;
+    });
+  }
+  return defaultReadyPromise;
+}
+
 /**
  * @param {() => Promise<void>} [ensureReady] — hàm lazy-boot (api/index.js truyền
  *        vào khi chạy trên Vercel; server.js tự init trước listen nên không cần).
  */
-function createApp(ensureReady) {
+function buildApp(ensureReady) {
   const app = express();
 
   app.disable('x-powered-by');
@@ -100,4 +122,43 @@ function createApp(ensureReady) {
   return app;
 }
 
-module.exports = { createApp };
+/** Nhận diện tham số là HTTP request (IncomingMessage) chứ không phải callback. */
+function isRequestArg(arg) {
+  return (
+    !!arg &&
+    typeof arg === 'object' &&
+    typeof arg.on === 'function' &&
+    typeof arg.socket !== 'undefined'
+  );
+}
+
+let singletonApp = null;
+
+/**
+ * createApp — được export TRỰC TIẾP (module.exports = createApp).
+ *
+ * ⚠️ Quy tắc bắt buộc của runtime Vercel: module mà giá trị export "truy vết"
+ * về tới phải export một HÀM (không phải object). Trước đây file này export
+ * `{ createApp }` — object — nên Vercel từ chối với lỗi:
+ *   "Invalid export found in module /var/task/src/app.js.
+ *    The default export must be a function or server."
+ * Giờ đây module này export chính hàm createApp (kèm thuộc tính .createApp để
+ * code cũ destructuring `const { createApp } = require(...)` vẫn hoạt động).
+ *
+ * CHẾ ĐỘ PHÒNG THỦ: nếu bị gọi với (req, res) — tức entrypoint nào đó đã
+ * re-export thẳng hàm này làm handler — tự xây app 1 lần (singleton) rồi
+ * chuyển tiếp request, kèm lazy-boot dự phòng. Nhờ vậy kể cả repo GitHub
+ * chỉ cập nhật một nửa file, hệ thống vẫn chạy được.
+ */
+function createApp(ensureReady) {
+  if (isRequestArg(ensureReady)) {
+    if (!singletonApp) singletonApp = buildApp(defaultEnsureReady);
+    return singletonApp(ensureReady, arguments[1]);
+  }
+  // Không truyền ensureReady trên serverless → dùng lazy boot dự phòng.
+  return buildApp(ensureReady || (config.isServerless ? defaultEnsureReady : null));
+}
+
+module.exports = createApp;
+module.exports.createApp = createApp;
+module.exports.default = createApp;
