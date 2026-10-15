@@ -1,0 +1,26 @@
+{
+  "name": "oes",
+  "version": "1.0.0",
+  "description": "OES - Online Exam System: he thi truc tuyen sieu nhe chay serverless tren Vercel, du lieu JSON vinh vien tren Google Drive",
+  "main": "api/index.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "check-drive": "node tools/check-drive.js"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "keywords": [
+    "oes",
+    "online-exam",
+    "vercel",
+    "serverless",
+    "google-drive"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.19.2",
+    "googleapis": "^140.0.1"
+  }
+}
