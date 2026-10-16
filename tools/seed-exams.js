@@ -14,7 +14,7 @@
  */
 'use strict';
 
-require('../src/config');
+const config = require('../src/config');
 const driveClient = require('../src/drive/driveClient');
 const dataStore = require('../src/store/dataStore');
 const { buildSampleExams, missingSampleExams } = require('../src/data/sampleExams');
@@ -41,12 +41,13 @@ async function main() {
   }
   await dataStore.saveNow('exams');
 
-  const info = dataStore.getSyncInfo().find((i) => i.file === 'exams.json');
+  const examsFile = `exams${config.dataFileSuffix || ''}.json`;
+  const info = dataStore.getSyncInfo().find((i) => i.file === examsFile);
   console.log(`✓ Hoàn tất. Hiện có ${exams.length} đề thi trong hệ thống.`);
   console.log(
     info && info.pending
-      ? '⚠ exams.json CHƯA đồng bộ lên Google Drive — xem "Lỗi gần nhất" trong Admin Dashboard hoặc chạy: node tools/check-drive.js'
-      : '✓ exams.json đã đồng bộ lên Google Drive (hoặc đang chạy chế độ cục bộ ./data).'
+      ? `⚠ ${examsFile} CHƯA đồng bộ lên Google Drive — xem "Lỗi gần nhất" trong Admin Dashboard hoặc chạy: node tools/check-drive.js`
+      : `✓ ${examsFile} đã đồng bộ lên Google Drive (hoặc đang chạy chế độ cục bộ ./data).`
   );
 }
 

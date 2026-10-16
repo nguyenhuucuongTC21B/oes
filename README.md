@@ -415,6 +415,7 @@ Development) → bấm **Save** → sang tab **Deployments** → bấm nút **�
 | `GOOGLE_SERVICE_ACCOUNT_JSON` | ✅ (prod) | File key Service Account dạng **Base64** (khuyên dùng) hoặc JSON thô 1 dòng — sinh ở mục 3, Bước 7. |
 | `GOOGLE_DRIVE_FOLDER_ID` | ✅ (prod) | ID thư mục Drive lưu 3 file JSON — lấy ở mục 3, Bước 6b. |
 | `ADMIN_CCCDS` | tùy chọn | Danh sách CCCD được cấp quyền Admin khi đăng ký, phân cách bởi dấu phẩy. |
+| `DATA_FILE_SUFFIX` | tùy chọn | Hậu tố tên file dữ liệu để chạy NHIỀU BẢN chung 1 thư mục Drive: đặt `Vercel` → hệ thống dùng `usersVercel.json`, `examsVercel.json`, `resultsVercel.json`. Trên Vercel nếu không đặt, hệ thống TỰ mặc định `Vercel`; chạy local / render.com không đặt → giữ tên gốc `users.json`... |
 | `PORT` | — | Chỉ dùng khi chạy local (Vercel tự quản lý). |
 
 Ví dụ giá trị (minh họa):
@@ -491,9 +492,9 @@ FUNCTION_INVOCATION_FAILED"), phải đưa file mới lên repo trước:
 2. Mở repo GitHub của bạn (vd `nguyenhuucuongTC21B/oes`) → **Add file → Upload files**.
 3. Kéo thả **toàn bộ file + thư mục** trong bản giải nén vào ô upload (GitHub tự ghi đè
    file trùng tên; nếu bị chặn vì "exceeds 100 files" thì upload theo từng đợt nhỏ).
-4. Gõ nội dung commit (vd `Update OES R3 - fix Vercel export`) → **Commit changes**.
+4. Gõ nội dung commit (vd `Update OES R4 - fix session het han`) → **Commit changes**.
 5. Vercel tự deploy commit mới — kiểm tra mã commit trong deployment phải **khác** mã cũ.
-6. Mở `<domain>/api/health` — thấy `"build": "OES-VERCEL-R3"` là bản vá đã chạy thật.
+6. Mở `<domain>/api/health` — thấy `"build": "OES-VERCEL-R5"` là bản vá đã chạy thật.
 
 ### Cách B — Vercel CLI (không cần GitHub)
 
@@ -532,8 +533,19 @@ vercel --prod              # deploy bản chính thức
 
 ## 7. Câu hỏi nhanh (Vercel edition)
 
+**Chạy song song bản Vercel và bản render.com chung một thư mục Drive?** Từ bản R5, hệ thống
+tự tách dữ liệu theo hậu tố tên file (`DATA_FILE_SUFFIX`, xem bảng biến môi trường mục 4):
+bản Vercel ghi/đọc `usersVercel.json`, `examsVercel.json`, `resultsVercel.json` còn bản
+render.com tiếp tục dùng `users.json`, `exams.json`, `results.json` — hai bên KHÔNG ghi đè
+dữ liệu của nhau dù cùng trỏ vào một thư mục Drive. Lưu ý bắt buộc: Service Account không có
+dung lượng riêng nên bạn cần TẠO SẴN trong thư mục Drive 3 file `usersVercel.json`,
+`examsVercel.json`, `resultsVercel.json` (upload từ máy, nội dung mỗi file chỉ cần `[]`).
+Muốn khởi điểm với dữ liệu sẵn có của bản render.com: tải file gốc về, đổi tên thêm hậu tố
+`Vercel`, upload lại vào cùng thư mục. Đăng ký người dùng mới trên một bản KHÔNG xuất hiện
+trên bản kia; bài nộp, đề thi cũng tách biệt hoàn toàn.
+
 **Cách xác minh bản code mới đã chạy thật trên Vercel?** Mở `<domain>/api/health` — nếu JSON
-chứa `"build": "OES-VERCEL-R3"` tức bản sửa lỗi "Invalid export / FUNCTION_INVOCATION_FAILED"
+chứa `"build": "OES-VERCEL-R5"` tức bản sửa lỗi "Invalid export / FUNCTION_INVOCATION_FAILED"
 đã được deploy thành công. Nếu thấy 404, JSON khác, hoặc không có trường `build` → Vercel
 vẫn đang chạy **code cũ trong repo GitHub** (xem câu tiếp theo).
 
@@ -557,18 +569,19 @@ và chạy được. Nếu bạn tự chỉnh code, nhớ giữ nguyên quy tắ
 
 **Truy cập ra "500 FUNCTION_INVOCATION_FAILED" (có Request ID kiểu hkg1::...)?** Nghĩa là
 function bị crash lúc chạy. Thứ tự kiểm tra: (1) mở `<domain>/api/health` — không có
-`"build": "OES-VERCEL-R3"` ⇒ repo chưa có code mới, cập nhật lại theo câu trên; (2) đã có
+`"build": "OES-VERCEL-R5"` ⇒ repo chưa có code mới, cập nhật lại theo câu trên; (2) đã có
 marker mà lỗi ở request cụ thể ⇒ vào Dashboard → deployment mới nhất → **Runtime Logs**, lọc
 theo Request ID đó, đọc dòng lỗi đầu tiên: nếu là lỗi khởi tạo Drive (thiếu/misent env var)
 → sửa Environment Variables rồi Redeploy; bản code mới cũng trả trang JSON chẩn đoán
 `OES_INITIALIZATION_FAILED` kèm `message` chi tiết thay vì 500 trắng hoàn toàn.
 
-**Log nhắc "SESSION_SECRET chua duoc cau hinh"?** Bạn chưa khai báo đủ biến môi trường trên
-Vercel. Vào Project → Settings → Environment Variables khai báo đủ 3 biến bắt buộc
-(`GOOGLE_SERVICE_ACCOUNT_JSON`, `GOOGLE_DRIVE_FOLDER_ID`, `ADMIN_CCCDS`) + khuyến nghị mạnh
-`SESSION_SECRET` (chuỗi ngẫu nhiên dài bất kỳ) — xong **nhớ Redeploy** (Deployments → nút ⋯ →
-Redeploy) vì env mới chỉ áp dụng cho deployment mới. Thiếu `SESSION_SECRET`: mỗi lần instance
-mới thay thế, mọi thí sinh đang đăng nhập bị đẩy ra phải đăng nhập lại (không mất điểm).
+**Log nhắc "SESSION_SECRET chua duoc cau hinh"?** Từ bản R4, nếu chưa đặt `SESSION_SECRET`,
+hệ thống TỰ phái sinh khóa ký ổn định từ `GOOGLE_SERVICE_ACCOUNT_JSON` nên phiên đăng nhập
+VẪN hoạt động bình thường qua các instance (không còn lỗi "Phiên đăng nhập hết hạn hoặc
+không hợp lệ" lúc có lúc không). Tuy vậy vẫn khuyến nghị đặt `SESSION_SECRET` (chuỗi ngẫu
+nhiên dài bất kỳ) trong Project → Settings → Environment Variables để khóa không phụ thuộc
+vào nội dung Service Account — xong **nhớ Redeploy** (Deployments → nút ⋯ → Redeploy) vì
+env mới chỉ áp dụng cho deployment mới.
 
 **Ra 1 đề nhưng danh sách hiện 3 đề giống nhau?** Do bấm nút "Lưu đề thi" nhiều lần khi
 request đầu tiên còn chờ (cold start 1–3 giây, tưởng là không ăn nên bấm tiếp). OES đã:

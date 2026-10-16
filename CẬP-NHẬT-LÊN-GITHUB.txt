@@ -1,47 +1,111 @@
 ================================================================
- CẬP-NHẬT-LÊN-GITHUB.txt — OES bản R3 (15/10/2026)
- Bản sửa lỗi 500 FUNCTION_INVOCATION_FAILED / Invalid export
+ CAP-NHAT-LÊN-GITHUB.txt — OES bản R5 (15/10/2026)
+ 1) Tách dữ liệu riêng cho bản Vercel: usersVercel.json /
+    examsVercel.json / resultsVercel.json (không đụng chạm dữ
+    liệu bản render.com trong CÙNG thư mục Drive)
+ 2) Kế thừa bản R4: sửa "Phiên đăng nhập hết hạn hoặc không hợp lệ"
 ================================================================
 
-NGUYÊN NHÂN LỖI:
-  File src/app.js còn kết thúc bằng  module.exports = { createApp };
-  Runtime Vercel mới truy vết export tới module này, thấy OBJECT
-  (không phải hàm) → từ chối ở MỖI lần instance lạnh khởi động
-  → 500 FUNCTION_INVOCATION_FAILED lúc có lúc không.
+NGUYÊN TẮC HOẠT ĐỘNG (R5):
+  Bản Vercel giờ đọc/ghi 3 file CÓ HẬU TỐ "Vercel":
+      usersVercel.json  — tài khoản
+      examsVercel.json  — đề thi (tự nạp 3 bộ đề mẫu lần đầu)
+      resultsVercel.json— kết quả thi
+  Bản render.com tiếp tục dùng tên gốc users.json / exams.json /
+  results.json. Hai bản CÙNG trỏ vào một thư mục Drive nhưng dữ
+  liệu HOÀN TOÀN TÁCH BIỆT — không chồng chéo, không ghi đè.
+  (Cơ chế: biến môi trường DATA_FILE_SUFFIX — trên Vercel tự mặc
+  định "Vercel"; muốn đổi hậu tố khác thì tự đặt biến này.)
 
-----------------------------------------------------------------
- CÁCH A — CHUẨN NHẤT (upload toàn bộ, khuyên dùng)
-----------------------------------------------------------------
-1. Giải nén oes-vercel.zip ra máy.
-2. Mở repo GitHub của bạn → nút "Add file" → "Upload files".
-3. Kéo thả TOÀN BỘ file + thư mục vừa giải nén (kể cả thư mục api,
-   src, public, tools — GitHub tự ghi đè file trùng tên).
-4. Gõ commit, ví dụ: "OES R3 - fix Vercel export" → "Commit changes".
-5. Chờ Vercel tự deploy ~1 phút (mã commit mới phải KHÁC mã cũ).
-6. XÁC MINH: mở https://<domain>/api/health
-   → thấy "build": "OES-VERCEL-R3" là bản mới đã chạy thật.
+================================================================
+ BƯỚC 0 — CHUẨN BỊ THƯ MỤC DRIVE (làm 1 lần, QUAN TRỌNG NHẤT)
+================================================================
+Service Account KHÔNG có dung lượng riêng nên KHÔNG tự tạo được
+file mới. Trong thư mục Drive của bạn:
+  https://drive.google.com/drive/u/0/folders/1kvdJX6Va5OcS_OOQ8JN7hYh3aRRSFR5M
+cần có đủ 3 file ĐÚNG TÊN (bản Vercel sẽ dùng):
+      usersVercel.json
+      examsVercel.json
+      resultsVercel.json
 
-----------------------------------------------------------------
- CÁCH B — FIX NHANH (sửa đúng 1 file, đã kiểm chứng 4/4 test)
-----------------------------------------------------------------
-1. Mở file src/app.js trên GitHub → bấm biểu tượng cây bút (Edit).
-2. Xóa dòng cuối cùng:  module.exports = { createApp };
-3. Thay bằng 3 dòng:
-     module.exports = createApp;
-     module.exports.createApp = createApp;
-     module.exports.default = createApp;
-4. Commit changes → chờ Vercel deploy → mở lại trang chủ.
+Cách tạo — chọn 1 trong 2 phương án:
 
-----------------------------------------------------------------
- NẾU VẪN LỖI SAU KHI DEPLOY
-----------------------------------------------------------------
-- Vercel Dashboard → deployment mới nhất → tab "Runtime Logs".
-- Copy dòng ERROR ĐẦU TIÊN (hoặc dùng:
-  vercel logs --request-id <request-id>) và gửi lại cho hỗ trợ.
+  PHƯƠNG ÁN A — KHỞI ĐIỂM TRỐNG (bắt đầu từ số 0, khuyên dùng
+  nếu muốn dữ liệu Vercel sạch hoàn toàn):
+    1. Trên máy tính tạo 3 file, mỗi file nội dung chỉ cần: []
+    2. Lưu với tên usersVercel.json / examsVercel.json /
+       resultsVercel.json (đúng chính tả, V hoa, thường các chữ còn lại)
+    3. Mở thư mục Drive trên → kéo thả 3 file vào (upload dạng
+       "File JSON thuần" — KHÔNG tạo bằng Google Docs).
 
-GHI CHÚ MÔI TRƯỜNG (Settings → Environment Variables):
-  GOOGLE_SERVICE_ACCOUNT_JSON  : chuỗi Base64 của file key (1 dòng dài)
-  GOOGLE_DRIVE_FOLDER_ID       : CHỈ lấy ID sau /folders/
-  ADMIN_CCCDS                  : các CCCD admin, cách nhau bởi dấu phẩy
-  SESSION_SECRET               : chuỗi ngẫu nhiên dài bất kỳ
-  → Sửa xong biến môi trường phải Redeploy mới có hiệu lực.
+  PHƯƠNG ÁN B — KẾ THỪA DỮ LIỆU SẴN CÓ của bản render.com
+  (tài khoản/đề thi/kết quả hiện tại được sao chép sang bản Vercel
+  tại thời điểm copy; sau đó hai bên phát triển độc lập):
+    1. Trong thư mục Drive: tải về users.json, exams.json, results.json
+    2. Đổi tên thành usersVercel.json, examsVercel.json, resultsVercel.json
+    3. Upload 3 file đã đổi tên NGAY VÀO CÙNG thư mục
+       (file gốc KHÔNG được đổi tên/xóa — bản render.com vẫn dùng).
+
+⚠️ KHÔNG xóa/đổi tên file gốc users.json, exams.json, results.json
+   — bên render.com đang dùng chúng!
+
+================================================================
+ BƯỚC 1 — UPLOAD CODE R5 LÊN GITHUB
+================================================================
+CÁCH A — CHUẨN NHẤT (upload toàn bộ, khuyên dùng):
+ 1. Giải nén oes-vercel.zip ra máy.
+ 2. Mở repo GitHub → "Add file" → "Upload files".
+ 3. Kéo thả TOÀN BỘ file + thư mục (GitHub tự ghi đè file trùng tên).
+ 4. Commit: "OES R5 - tach du lieu Vercel" → Commit changes.
+ 5. Chờ Vercel tự deploy ~1 phút.
+
+CÁCH B — NHANH (chỉ thay 4 file, áp dụng khi repo đã chạy được):
+  Upload ghi đè 4 file sau từ bản zip:
+      src/config.js             (hậu tố tên file + khóa phiên ổn định)
+      src/store/dataStore.js    (đọc/ghi theo tên file có hậu tố)
+      src/drive/driveClient.js  (chẩn đoán Drive hiểu tên có hậu tố)
+      src/routes/public.routes.js (build marker R5 để xác minh)
+  → Commit → chờ deploy.
+
+================================================================
+ BƯỚC 2 — KIỂM TRA BIẾN MÔI TRƯỜNG TRÊN VERCEL
+================================================================
+Project oes → Settings → Environment Variables, đối chiếu:
+  GOOGLE_SERVICE_ACCOUNT_JSON : (giữ nguyên như hiện tại)
+  GOOGLE_DRIVE_FOLDER_ID      : phải là 1kvdJX6Va5OcS_OOQ8JN7hYh3aRRSFR5M
+                                (thư mục ở Bước 0 — nếu đang khác thì
+                                sửa rồi nhớ Redeploy)
+  ADMIN_CCCDS                 : (giữ nguyên)
+  SESSION_SECRET              : khuyến nghị có (chuỗi random dài bất kỳ);
+                                thiếu cũng không chết — R4 tự phái sinh khóa ổn định
+  DATA_FILE_SUFFIX            : KHÔNG cần đặt (tự mặc định "Vercel" trên Vercel)
+
+Sau khi thêm/sửa biến → Deployments → nút ⋯ → Redeploy.
+
+================================================================
+ BƯỚC 3 — XÁC MINH SAU DEPLOY (làm đủ 4 bước)
+================================================================
+1. Mở https://<domain>/api/health
+   → phải thấy  "ok": true, "build": "OES-VERCEL-R5"
+2. Đăng nhập admin → tạo đề/đăng ký user thử → nộp 1 bài thử.
+3. Mở thư mục Drive ở Bước 0 → thấy usersVercel.json,
+   resultsVercel.json CÓ DỮ LIỆU MỚI (mở file xem nội dung),
+   còn users.json / results.json GIỮ NGUYÊN — bên render.com không bị động đến.
+4. Vào thi thử lại → không còn báo "Phiên đăng nhập hết hạn hoặc
+   không hợp lệ" (bản R4 đã kèm trong R5).
+
+Lưu ý: bản Vercel sẽ KHÔNG thấy tài khoản đã đăng ký trước đây
+trên hệ thống cũ (đó là chủ đích tách dữ liệu). Muốn giữ tài khoản
+cũ → dùng PHƯƠNG ÁN B ở Bước 0. Admin đăng ký trên bản Vercel luôn
+là người dùng ĐẦU TIÊN đăng ký khi usersVercel.json còn trống.
+
+================================================================
+ NHẬN DIỆN NHANH CÁC TRIỆU CHỨNG
+================================================================
+- /api/health thấy "build": "OES-VERCEL-R4" → mới bản R4, chưa R5 → upload lại.
+- Nộp bài không lưu / Drive báo lỗi dung lượng → thiếu 3 file
+  *Vercel.json trong thư mục → làm lại Bước 0.
+- /api/health trả 401 "Phiên đăng nhập hết hạn..." → repo còn thiếu
+  file bản mới (public.routes.js...) → dùng CÁCH A upload toàn bộ.
+- Trang chủ 404 → deployment bị xóa/chưa có bản production → xem tab Deployments.
+- 500 FUNCTION_INVOCATION_FAILED → src/app.js chưa export hàm → upload toàn bộ theo CÁCH A.

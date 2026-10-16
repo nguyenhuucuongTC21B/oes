@@ -46,6 +46,14 @@ const { adviceForError, isQuotaError } = require('../utils/driveAdvice');
 const { globalMutex } = require('../utils/mutex');
 
 const FILES = ['users', 'exams', 'results'];
+/**
+ * Tên file dữ liệu của một kho (Drive + mirror cục bộ đều dùng helper này).
+ * Có hậu tố config.dataFileSuffix (vd "Vercel") để tách dữ liệu giữa các bản
+ * deploy dùng chung thư mục Drive: usersVercel.json / examsVercel.json / resultsVercel.json.
+ */
+function fileNameOf(key) {
+  return `${key}${config.dataFileSuffix || ''}.json`;
+}
 /** Trường định danh của bản ghi trong từng file (dùng cho baseline-merge). */
 const ID_FIELD = { users: 'cccd', exams: 'id', results: 'id' };
 /** Tuổi tối đa của cache đọc trước khi tự tải lại từ Drive (ms). */
@@ -117,10 +125,10 @@ async function seedSampleExamsIfEmpty() {
 }
 
 async function initOne(key) {
-  const fileName = `${key}.json`;
+  const fname = fileNameOf(key);
   if (driveClient.isDriveMode()) {
     try {
-      const fileId = await driveClient.findFileByName(fileName);
+      const fileId = await driveClient.findFileByName(fname);
       if (fileId) {
         const data = await driveClient.downloadFile(fileId);
         store[key].data = Array.isArray(data) ? data : [];
@@ -134,7 +142,7 @@ async function initOne(key) {
       store[key].loadedAt = Date.now();
       store[key].bootLoadedOk = true;
       await mirrorLocal(key);
-      console.log(`[store] Tai ${fileName} tu Google Drive: ${store[key].data.length} ban ghi`);
+      console.log(`[store] Tai ${fname} tu Google Drive: ${store[key].data.length} ban ghi`);
       return;
     } catch (err) {
       // NGHIÊM TRỌNG: RAM có thể rỗng trong khi Drive còn dữ liệu cũ → cấm
@@ -143,18 +151,18 @@ async function initOne(key) {
       const tip = adviceForError(err);
       store[key].lastSyncError =
         `Lúc khởi động không đọc được file từ Drive: ${err.message}${tip ? ` → ${tip}` : ''}`;
-      console.error(`[store] Khong tai duoc ${fileName} tu Drive (${err.message}).`);
+      console.error(`[store] Khong tai duoc ${fname} tu Drive (${err.message}).`);
       // Rơi xuống đọc mirror nếu có (instance cũ trên cùng máy cục bộ).
     }
   }
   // Fallback mirror cục bộ (chế độ local, hoặc Drive lỗi lúc local).
   try {
-    const text = await fs.readFile(path.join(config.localDataDir, fileName), 'utf8');
+    const text = await fs.readFile(path.join(config.localDataDir, fname), 'utf8');
     const data = JSON.parse(text);
     store[key].data = Array.isArray(data) ? data : [];
     store[key].baseline = new Map(store[key].data.map((r) => [idOf(key, r), JSON.stringify(r)]));
     store[key].loadedAt = Date.now();
-    console.log(`[store] Tai ${fileName} tu cache cuc bo: ${store[key].data.length} ban ghi`);
+    console.log(`[store] Tai ${fname} tu cache cuc bo: ${store[key].data.length} ban ghi`);
   } catch {
     store[key].data = [];
   }
@@ -200,7 +208,7 @@ async function refreshIfStale(key, maxAgeMs = CACHE_TTL_MS) {
     try {
       let fileId = s.fileId;
       if (!fileId) {
-        fileId = await driveClient.findFileByName(`${key}.json`);
+        fileId = await driveClient.findFileByName(fileNameOf(key));
         if (!fileId) {
           s.loadedAt = Date.now(); // File chưa tồn tại — coi như mới nạp (rỗng).
           return;
@@ -263,7 +271,7 @@ async function saveNow(key) {
       // Drive đang reachable → mọi quyết định ghi đều dựa trên sự thật này.
       let fileId = s.fileId;
       if (!fileId) {
-        const found = await driveClient.findFileByName(`${key}.json`);
+        const found = await driveClient.findFileByName(fileNameOf(key));
         if (found) {
           s.fileId = fileId = found;
         }
@@ -281,7 +289,7 @@ async function saveNow(key) {
           s.lastSyncError =
             `Chưa đọc được dữ liệu mới nhất từ Drive trước khi ghi: ${fetchErr.message}${tip ? ` → ${tip}` : ''}`;
           console.error(
-            `[store] HOAN ghi ${key}.json — khong doc duoc ban moi tren Drive (${fetchErr.message}). ` +
+            `[store] HOAN ghi ${fileNameOf(key)} — khong doc duoc ban moi tren Drive (${fetchErr.message}). ` +
               'Du lieu van an toan trong RAM cua instance; request ke tiep se tu thu lai.'
           );
           return { synced: false };
@@ -312,7 +320,7 @@ async function saveNow(key) {
           if (rid === null || ourIds.has(rid)) continue;
           if (!s.baseline.has(rid)) {
             merged.push(remoteRec); // Instance khác vừa thêm mới → giữ lại.
-            console.log(`[store] Merge: nhan ban ghi moi tu instance khac vao ${key}.json (id=${rid})`);
+            console.log(`[store] Merge: nhan ban ghi moi tu instance khac vao ${fileNameOf(key)} (id=${rid})`);
           }
           // rid nằm trong baseline nhưng không có trong RAM → ta đã xóa → bỏ qua.
         }
@@ -329,18 +337,18 @@ async function saveNow(key) {
       if (s.fileId) {
         await driveClient.updateFile(s.fileId, payload);
       } else {
-        s.fileId = await driveClient.createFile(`${key}.json`, payload);
+        s.fileId = await driveClient.createFile(fileNameOf(key), payload);
       }
       s.lastSyncedAt = new Date().toISOString();
       s.lastSyncError = null;
       s.loadedAt = Date.now();
-      console.log(`[store] Da ghi ${key}.json len Google Drive (${s.data.length} ban ghi)`);
+      console.log(`[store] Da ghi ${fileNameOf(key)} len Google Drive (${s.data.length} ban ghi)`);
       return { synced: true };
     } catch (err) {
       const tip = adviceForError(err);
       s.lastSyncError = `${err.message}${tip ? ` → ${tip}` : ''}`;
       if (tip) console.error(`[store] CACH SUA: ${tip}`);
-      console.error(`[store] KHONG ghi duoc ${key}.json: ${err.message}`);
+      console.error(`[store] KHONG ghi duoc ${fileNameOf(key)}: ${err.message}`);
       return { synced: false };
     }
   });
@@ -351,7 +359,7 @@ async function mirrorLocal(key) {
   try {
     await fs.mkdir(config.localDataDir, { recursive: true });
     await fs.writeFile(
-      path.join(config.localDataDir, `${key}.json`),
+      path.join(config.localDataDir, fileNameOf(key)),
       JSON.stringify(store[key].data, null, 2),
       'utf8'
     );
@@ -375,7 +383,7 @@ function getSyncInfo() {
   return FILES.map((key) => {
     const s = store[key] || {};
     return {
-      file: `${key}.json`,
+      file: fileNameOf(key),
       records: s.data ? s.data.length : 0,
       lastSyncedAt: s.lastSyncedAt || null,
       pending: false,
@@ -412,5 +420,6 @@ module.exports = {
   flushOnShutdown,
   getSyncInfo,
   reloadFromDrive,
+  fileNameOf,
   FILES,
 };

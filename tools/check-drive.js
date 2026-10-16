@@ -31,7 +31,17 @@ const crypto = require('crypto');
 
 const ROOT = path.join(__dirname, '..');
 const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive';
-const FILES = ['users.json', 'exams.json', 'results.json'];
+// Tên file dữ liệu theo đúng hậu tố cấu hình (bản Vercel dùng *Vercel.json).
+// config.js tự đọc .env nên đặt DATA_FILE_SUFFIX=Vercel trong .env nếu muốn
+// kiểm tra đúng bộ file mà bản trên Vercel sử dụng.
+const FILES = (() => {
+  try {
+    const suffix = require('../src/config').dataFileSuffix || '';
+    return ['users', 'exams', 'results'].map((k) => `${k}${suffix}.json`);
+  } catch {
+    return ['users.json', 'exams.json', 'results.json'];
+  }
+})();
 
 /* ---------------------------- Tiện ích in màu ---------------------------- */
 
@@ -180,7 +190,7 @@ function adviceForError(err) {
     return 'BỊ TỪ CHỐI QUYỀN. Thư mục chưa được Share cho email Service Account (hoặc chỉ share quyền Viewer). Làm lại README Bước 6c: nút Share → dán client_email → quyền EDITOR → Send. Nếu bạn dùng tài khoản tổ chức (công ty/trường), admin có thể chặn chia sẻ ra ngoài — hãy tạo thư mục bằng tài khoản @gmail.com cá nhân.';
   }
   if (msg.includes('storagequotaexceeded') || msg.includes('disk quota')) {
-    return 'LỖI DUNG LƯỢNG (hiếm gặp). Service Account không có dung lượng riêng. Tự tạo sẵn 3 file rỗng trong thư mục Drive: users.json / exams.json / results.json (mỗi file chỉ cần chữ []) rồi chạy lại — server sẽ dùng đúng các file đó, không tự tạo nữa.';
+    return `LỖI DUNG LƯỢNG (hiếm gặp). Service Account không có dung lượng riêng. Tự tạo sẵn 3 file rỗng trong thư mục Drive: \${FILES.join(' / ')} (mỗi file chỉ cần chữ []) rồi chạy lại — server sẽ dùng đúng các file đó, không tự tạo nữa.`;
   }
   if (msg.includes('err_ossl') || msg.includes('decoder routines') || msg.includes('pem_read') || msg.includes('no start line') || msg.includes('bad decrypt')) {
     return 'PRIVATE_KEY KHÔNG ĐỌC ĐƯỢC. Chuỗi key bị hỏng khi copy/encode Base64 (thiếu đầu/cuối, đứt dòng, dán thiếu). Tạo lại: node tools/check-drive.js "đường-dẫn-file-key" rồi copy TRỌN VẸN GOOGLE_SERVICE_ACCOUNT_JSON mới (| Set-Clipboard trên Windows, | pbcopy trên macOS).';

@@ -12,10 +12,11 @@ const router = express.Router();
 
 /**
  * Nhãn phiên bản build — dùng để xác minh code mới đã được deploy:
- * mở <domain>/api/health, nếu thấy "build": "OES-VERCEL-R3" tức bản sửa lỗi
- * "Invalid export / FUNCTION_INVOCATION_FAILED" đã chạy thật trên Vercel.
+ * mở <domain>/api/health, nếu thấy "build": "OES-VERCEL-R5" tức bản sửa lỗi
+ * "Phiên đăng nhập hết hạn hoặc không hợp lệ" (R4) + tách file dữ liệu riêng
+ * usersVercel.json / examsVercel.json / resultsVercel.json (R5) đã chạy thật.
  */
-const BUILD_TAG = 'OES-VERCEL-R3';
+const BUILD_TAG = 'OES-VERCEL-R5';
 
 /** Số liệu tuyên truyền chỉ chứa con số tổng hợp, không chứa thông tin cá nhân. */
 router.get('/stats', (req, res) => {

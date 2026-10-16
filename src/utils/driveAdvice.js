@@ -57,10 +57,18 @@ function adviceForError(err) {
       'đổi quyền thành EDITOR → Send. Nếu dùng tài khoản tổ chức bị chặn chia sẻ, hãy tạo thư mục bằng @gmail.com cá nhân.';
   }
   if (isQuotaError(err)) {
+    // Tên file phụ thuộc hậu tố cấu hình (bản Vercel dùng *Vercel.json).
+    let names = 'users.json, exams.json, results.json';
+    try {
+      const suffix = require('../config').dataFileSuffix || '';
+      if (suffix) {
+        names = `users${suffix}.json, exams${suffix}.json, results${suffix}.json`;
+      }
+    } catch { /* bỏ qua — dùng tên gốc */ }
     return 'LỖI DUNG LƯỢNG: Service Account KHÔNG có dung lượng riêng nên không tự tạo được file MỚI (giới hạn của Google). ' +
-      'Hệ thống vẫn chạy tốt nếu trong thư mục Drive đã có sẵn 3 file THUẦN đúng tên: users.json, exams.json, results.json ' +
+      `Hệ thống vẫn chạy tốt nếu trong thư mục Drive đã có sẵn 3 file THUẦN đúng tên: ${names} ` +
       '(tạo bằng cách UPLOAD file .json từ máy tính — KHÔNG dùng "Google Docs"; nội dung mỗi file chỉ cần []). ' +
-      'Nếu đã tạo rồi: kiểm tra đúng chính tả tên file (chữ thường, có đuôi .json) rồi bấm "Kiểm tra lại" — mức 4 sẽ tự chuyển sang kiểm tra cập nhật file có sẵn.';
+      'Nếu đã tạo rồi: kiểm tra đúng chính tả tên file (chữ thường, có đuôi .json, đúng hậu tố nếu có) rồi bấm "Kiểm tra lại" — mức 4 sẽ tự chuyển sang kiểm tra cập nhật file có sẵn.';
   }
   if (msg.includes('err_ossl') || msg.includes('decoder routines') || msg.includes('pem_read') || msg.includes('no start line') || msg.includes('bad decrypt')) {
     return 'PRIVATE_KEY KHÔNG ĐỌC ĐƯỢC: chuỗi key bị hỏng khi copy/encode Base64 (thiếu đầu/cuối, đứt dòng, dán thiếu). ' +

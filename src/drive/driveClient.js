@@ -15,6 +15,7 @@
 
 const { Readable } = require('stream');
 const { google } = require('googleapis');
+const config = require('../config');
 const { adviceForError, isQuotaError } = require('../utils/driveAdvice');
 
 const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive';
@@ -252,43 +253,73 @@ async function getFileMeta(fileId) {
 /**
  * Kiểm tra "mô hình 3 file tạo sẵn": Service Account không có dung lượng riêng
  * nên không tự tạo được file mới — nhưng có CẬP NHẬT được file có sẵn hay không?
- * Duyệt users.json → exams.json → results.json, lấy file đầu tiên tìm thấy:
+ * Ưu tiên file có hậu tố cấu hình (vd usersVercel.json) rồi mới tới tên gốc
+ * (users.json — do bản deploy khác dùng chung thư mục tạo ra), lấy file đầu tiên tìm thấy:
  *  - Tải nội dung HIỆN TẠI về, ghi lại ĐÚNG nội dung đó (không đổi gì) — an toàn tuyệt đối.
  *  - File là Google Docs (không phải JSON thuần) → báo lỗi cụ thể để user upload lại.
  * Trả về { ok, detail }.
  */
 async function checkUpdateExistingFile(dapi, fid) {
-  const NAMES = ['users.json', 'exams.json', 'results.json'];
-  for (const name of NAMES) {
-    let fileId = null;
-    try {
-      const res = await dapi.files.list({
-        q: `name = '${name}' and '${fid}' in parents and trashed = false`,
-        fields: 'files(id, name, mimeType)',
-        pageSize: 1,
-      });
-      const f = res.data && res.data.files && res.data.files[0];
-      if (!f) continue;
-      fileId = f.id;
-      if (f.mimeType && f.mimeType !== 'application/json') {
-        return {
-          ok: false,
-          detail: `file ${name} đang là "${f.mimeType}" (không phải file JSON thuần — có thể bạn tạo bằng Google Docs). Hãy XÓA file đó trong thư mục rồi UPLOAD lại file .json từ máy tính (nội dung []).`,
-        };
+  const suffix = config.dataFileSuffix || '';
+  const base = ['users', 'exams', 'results'].map((k) => `${k}.json`);
+  const suffixed = suffix ? base.map((k) => k.replace('.json', `${suffix}.json`)) : [];
+
+  /** Thử cập nhật file đầu tiên tìm thấy trong `names`. Trả null nếu không có file nào. */
+  const probe = async (names) => {
+    for (const name of names) {
+      let fileId = null;
+      try {
+        const res = await dapi.files.list({
+          q: `name = '${name}' and '${fid}' in parents and trashed = false`,
+          fields: 'files(id, name, mimeType)',
+          pageSize: 1,
+        });
+        const f = res.data && res.data.files && res.data.files[0];
+        if (!f) continue;
+        fileId = f.id;
+        if (f.mimeType && f.mimeType !== 'application/json') {
+          return {
+            ok: false,
+            detail: `file ${name} đang là "${f.mimeType}" (không phải file JSON thuần — có thể bạn tạo bằng Google Docs). Hãy XÓA file đó trong thư mục rồi UPLOAD lại file .json từ máy tính (nội dung []).`,
+          };
+        }
+        const dl = await dapi.files.get({ fileId, alt: 'media' }, { responseType: 'arraybuffer' });
+        const content = Buffer.from(dl.data).toString('utf8');
+        await dapi.files.update({ fileId, media: { mimeType: 'application/json', body: Readable.from([content]) } });
+        return { ok: true, detail: `${name}` };
+      } catch (e) {
+        if (fileId) return { ok: false, detail: `không cập nhật được file ${name}: ${e.message}` };
+        continue; // Không thấy file này — thử file tiếp theo.
       }
-      const dl = await dapi.files.get({ fileId, alt: 'media' }, { responseType: 'arraybuffer' });
-      const content = Buffer.from(dl.data).toString('utf8');
-      await dapi.files.update({ fileId, media: { mimeType: 'application/json', body: Readable.from([content]) } });
-      return { ok: true, detail: `${name}` };
-    } catch (e) {
-      if (fileId) return { ok: false, detail: `không cập nhật được file ${name}: ${e.message}` };
-      continue; // Không thấy file này — thử file tiếp theo.
     }
-  }
-  return {
-    ok: false,
-    detail: 'không tìm thấy file nào trong thư mục — cần tạo sẵn users.json, exams.json, results.json (upload file .json từ máy, nội dung mỗi file chỉ cần []).',
+    return null;
   };
+
+  // 1) Ưu tiên file đúng tên mà bản deploy này thực sự đọc/ghi.
+  if (suffixed.length) {
+    const hit = await probe(suffixed);
+    if (hit) return hit;
+  }
+
+  // 2) Dò file gốc (của bản deploy khác cùng thư mục) để còn chẩn đoán chính xác.
+  const originalHit = await probe(base);
+  if (suffixed.length) {
+    return {
+      ok: false,
+      detail: originalHit
+        ? `Thư mục có 3 file gốc (users.json...) nhưng bản deploy này cấu hình hậu tố "${suffix}" nên chỉ đọc/ghi users${suffix}.json, exams${suffix}.json, results${suffix}.json. Hãy tạo 3 file ĐÚNG TÊN CÓ HẬU TỐ này trong thư mục (upload file .json từ máy, nội dung mỗi file chỉ cần []) — nếu không hệ thống sẽ không lưu được dữ liệu vào Drive.`
+        : `Không thấy file dữ liệu nào khớp tên bản deploy này (users${suffix}.json, exams${suffix}.json, results${suffix}.json) — hãy tạo sẵn 3 file đó trong thư mục (upload file .json từ máy, nội dung mỗi file chỉ cần []).`,
+    };
+  }
+
+  // 3) Không có hậu tố — kết quả dò file gốc chính là kết quả cuối.
+  return (
+    originalHit || {
+      ok: false,
+      detail:
+        'không tìm thấy file nào trong thư mục — cần tạo sẵn users.json, exams.json, results.json (upload file .json từ máy, nội dung mỗi file chỉ cần []).',
+    }
+  );
 }
 
 /**
