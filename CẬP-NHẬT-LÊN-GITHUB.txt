@@ -1,111 +1,117 @@
 ================================================================
- CAP-NHAT-LÊN-GITHUB.txt — OES bản R5 (15/10/2026)
- 1) Tách dữ liệu riêng cho bản Vercel: usersVercel.json /
-    examsVercel.json / resultsVercel.json (không đụng chạm dữ
-    liệu bản render.com trong CÙNG thư mục Drive)
- 2) Kế thừa bản R4: sửa "Phiên đăng nhập hết hạn hoặc không hợp lệ"
+ CAP-NHAT-LÊN-GITHUB.txt — OES bản R6 (16/10/2026)
+ 1) SỰ CỐ 16/10: mọi API trả 401 "Phiên đăng nhập hết hạn..."
+    kể cả ĐĂNG KÝ — do deployment chạy THIẾU file (repo cũ dở dang)
+    → R6 tự phục hồi đường dẫn + chẩn đoán rõ ràng
+ 2) Giữ nguyên R5: tách dữ liệu usersVercel.json / examsVercel.json
+    / resultsVercel.json khỏi bản render.com
+ 3) Giữ nguyên R4: khóa phiên ổn định đa instance
 ================================================================
 
-NGUYÊN TẮC HOẠT ĐỘNG (R5):
-  Bản Vercel giờ đọc/ghi 3 file CÓ HẬU TỐ "Vercel":
-      usersVercel.json  — tài khoản
-      examsVercel.json  — đề thi (tự nạp 3 bộ đề mẫu lần đầu)
-      resultsVercel.json— kết quả thi
-  Bản render.com tiếp tục dùng tên gốc users.json / exams.json /
-  results.json. Hai bản CÙNG trỏ vào một thư mục Drive nhưng dữ
-  liệu HOÀN TOÀN TÁCH BIỆT — không chồng chéo, không ghi đè.
-  (Cơ chế: biến môi trường DATA_FILE_SUFFIX — trên Vercel tự mặc
-  định "Vercel"; muốn đổi hậu tố khác thì tự đặt biến này.)
+CHẨN ĐOÁN SỰ CỐ 16/10 (đã xác minh):
+  - Logs Vercel cho thấy dataStore R5 ĐÃ chạy (nạp usersVercel.json,
+    examsVercel.json, resultsVercel.json từ Drive đúng).
+  - Nhưng log "Lazy boot du phong (entrypoint khong truyen
+    ensureReady)" + "[api] POST /api/index -> 401" chứng tỏ bản
+    deploy đang chạy thiếu file mới: api/index.js còn BẢN CŨ.
+  - Hệ quả: mọi request API bị đưa vào lambda với đường dẫn
+    "/api/index" thay vì đường dẫn thật → không route nào khớp →
+    rơi vào nhóm route yêu cầu đăng nhập → 401 cho TẤT CẢ, kể cả
+    đăng ký/đăng nhập (form hiển thị nhầm "Phiên đăng nhập hết hạn").
+  - Repo GitHub hiện tại ĐÃ ĐỦ code R5 — chỉ cần deploy LẠI ĐẦY ĐỦ.
+
+BẢN R6 LÀM GÌ:
+  1. TỰ PHỤC HỒI ĐƯỜNG DẪN GỐC: kể khi deploy trộn lẫn (còn file
+     cũ), request bị đẩy về "/api/index" vẫn được khôi phục về
+     đường dẫn thật từ header định tuyến của Vercel → hệ thống
+     VẪN CHẠY ĐÚNG thay vì 401 hàng loạt.
+  2. CHẨN ĐOÁN RÕ RÀNG: nếu không khôi phục được, /api/index trả
+     500 {"error":"OES_ROUTING_MISMATCH"} kèm hướng dẫn cụ thể
+     (thay vì 401 "Phiên hết hạn" gây hiểu lầm).
+  3. Sửa /admin/sync: khi Drive lỗi giờ trả synced=false kèm nguyên
+     nhân (trước đây báo nhầm "đã đồng bộ an toàn").
+  4. Build marker: /api/health → "build": "OES-VERCEL-R6".
 
 ================================================================
- BƯỚC 0 — CHUẨN BỊ THƯ MỤC DRIVE (làm 1 lần, QUAN TRỌNG NHẤT)
+ BƯỚC 1 — UPLOAD TOÀN BỘ CODE R6 (BẮT BUỘC CÁCH A)
 ================================================================
-Service Account KHÔNG có dung lượng riêng nên KHÔNG tự tạo được
-file mới. Trong thư mục Drive của bạn:
-  https://drive.google.com/drive/u/0/folders/1kvdJX6Va5OcS_OOQ8JN7hYh3aRRSFR5M
-cần có đủ 3 file ĐÚNG TÊN (bản Vercel sẽ dùng):
-      usersVercel.json
-      examsVercel.json
-      resultsVercel.json
+⚠️ ĐỪNG upload một phần nữa — chính upload thiếu file gây sự cố này.
 
-Cách tạo — chọn 1 trong 2 phương án:
-
-  PHƯƠNG ÁN A — KHỞI ĐIỂM TRỐNG (bắt đầu từ số 0, khuyên dùng
-  nếu muốn dữ liệu Vercel sạch hoàn toàn):
-    1. Trên máy tính tạo 3 file, mỗi file nội dung chỉ cần: []
-    2. Lưu với tên usersVercel.json / examsVercel.json /
-       resultsVercel.json (đúng chính tả, V hoa, thường các chữ còn lại)
-    3. Mở thư mục Drive trên → kéo thả 3 file vào (upload dạng
-       "File JSON thuần" — KHÔNG tạo bằng Google Docs).
-
-  PHƯƠNG ÁN B — KẾ THỪA DỮ LIỆU SẴN CÓ của bản render.com
-  (tài khoản/đề thi/kết quả hiện tại được sao chép sang bản Vercel
-  tại thời điểm copy; sau đó hai bên phát triển độc lập):
-    1. Trong thư mục Drive: tải về users.json, exams.json, results.json
-    2. Đổi tên thành usersVercel.json, examsVercel.json, resultsVercel.json
-    3. Upload 3 file đã đổi tên NGAY VÀO CÙNG thư mục
-       (file gốc KHÔNG được đổi tên/xóa — bản render.com vẫn dùng).
-
-⚠️ KHÔNG xóa/đổi tên file gốc users.json, exams.json, results.json
-   — bên render.com đang dùng chúng!
-
-================================================================
- BƯỚC 1 — UPLOAD CODE R5 LÊN GITHUB
-================================================================
-CÁCH A — CHUẨN NHẤT (upload toàn bộ, khuyên dùng):
- 1. Giải nén oes-vercel.zip ra máy.
+ 1. Giải nén oes-vercel.zip (bản R6) ra máy.
  2. Mở repo GitHub → "Add file" → "Upload files".
- 3. Kéo thả TOÀN BỘ file + thư mục (GitHub tự ghi đè file trùng tên).
- 4. Commit: "OES R5 - tach du lieu Vercel" → Commit changes.
- 5. Chờ Vercel tự deploy ~1 phút.
-
-CÁCH B — NHANH (chỉ thay 4 file, áp dụng khi repo đã chạy được):
-  Upload ghi đè 4 file sau từ bản zip:
-      src/config.js             (hậu tố tên file + khóa phiên ổn định)
-      src/store/dataStore.js    (đọc/ghi theo tên file có hậu tố)
-      src/drive/driveClient.js  (chẩn đoán Drive hiểu tên có hậu tố)
-      src/routes/public.routes.js (build marker R5 để xác minh)
-  → Commit → chờ deploy.
+ 3. Kéo thả TOÀN BỘ file + thư mục trong zip (GitHub tự ghi đè
+    file trùng tên, giữ nguyên file không trùng).
+ 4. KIỂM TRA SAU UPLOAD — repo PHẢI có đủ các file này (đường dẫn
+    đúng từ gốc repo):
+      api/index.js            ← file bị thiếu gây sự cố 16/10
+      vercel.json
+      package.json
+      server.js
+      src/app.js
+      src/config.js
+      src/store/dataStore.js
+      src/drive/driveClient.js
+      src/middleware/auth.js
+      src/routes/auth.routes.js
+      src/routes/exam.routes.js
+      src/routes/admin.routes.js
+      src/routes/public.routes.js
+      public/login.html  (và các file trong public/)
+ 5. Commit: "OES R6 - tu phuc hoi duong dan, chong deploy thieu file".
 
 ================================================================
- BƯỚC 2 — KIỂM TRA BIẾN MÔI TRƯỜNG TRÊN VERCEL
+ BƯỚC 2 — REDEPLOY KHÔNG DÙNG BUILD CACHE (QUAN TRỌNG)
 ================================================================
-Project oes → Settings → Environment Variables, đối chiếu:
-  GOOGLE_SERVICE_ACCOUNT_JSON : (giữ nguyên như hiện tại)
-  GOOGLE_DRIVE_FOLDER_ID      : phải là 1kvdJX6Va5OcS_OOQ8JN7hYh3aRRSFR5M
-                                (thư mục ở Bước 0 — nếu đang khác thì
-                                sửa rồi nhớ Redeploy)
+Vercel đang phục vụ một deployment CŨ. Để buộc chạy code mới:
+  Vercel Dashboard → Project oes → tab Deployments → bản mới nhất
+  → nút ⋯ → Redeploy → TẮT chuyển "Use existing Build Cache"
+  → Redeploy. Chờ ~1 phút until Ready.
+
+================================================================
+ BƯỚC 3 — KIỂM TRA BIẾN MÔI TRƯỜNG (đối chiếu nhanh)
+================================================================
+Project oes → Settings → Environment Variables:
+  GOOGLE_SERVICE_ACCOUNT_JSON : (giữ nguyên)
+  GOOGLE_DRIVE_FOLDER_ID      : 1kvdJX6Va5OcS_OOQ8JN7hYh3aRRSFR5M
   ADMIN_CCCDS                 : (giữ nguyên)
-  SESSION_SECRET              : khuyến nghị có (chuỗi random dài bất kỳ);
-                                thiếu cũng không chết — R4 tự phái sinh khóa ổn định
-  DATA_FILE_SUFFIX            : KHÔNG cần đặt (tự mặc định "Vercel" trên Vercel)
-
-Sau khi thêm/sửa biến → Deployments → nút ⋯ → Redeploy.
+  SESSION_SECRET              : khuyến nghị có; thiếu không chết
+                                (R4 tự phái sinh khóa ổn định)
+  DATA_FILE_SUFFIX            : KHÔNG cần đặt (tự mặc định "Vercel")
+Sau khi sửa biến → Redeploy lại như Bước 2.
 
 ================================================================
- BƯỚC 3 — XÁC MINH SAU DEPLOY (làm đủ 4 bước)
+ BƯỚC 4 — XÁC MINH SAU DEPLOY (làm đủ 4 bước)
 ================================================================
 1. Mở https://<domain>/api/health
-   → phải thấy  "ok": true, "build": "OES-VERCEL-R5"
-2. Đăng nhập admin → tạo đề/đăng ký user thử → nộp 1 bài thử.
-3. Mở thư mục Drive ở Bước 0 → thấy usersVercel.json,
-   resultsVercel.json CÓ DỮ LIỆU MỚI (mở file xem nội dung),
-   còn users.json / results.json GIỮ NGUYÊN — bên render.com không bị động đến.
-4. Vào thi thử lại → không còn báo "Phiên đăng nhập hết hạn hoặc
-   không hợp lệ" (bản R4 đã kèm trong R5).
-
-Lưu ý: bản Vercel sẽ KHÔNG thấy tài khoản đã đăng ký trước đây
-trên hệ thống cũ (đó là chủ đích tách dữ liệu). Muốn giữ tài khoản
-cũ → dùng PHƯƠNG ÁN B ở Bước 0. Admin đăng ký trên bản Vercel luôn
-là người dùng ĐẦU TIÊN đăng ký khi usersVercel.json còn trống.
+   → phải thấy "ok": true, "build": "OES-VERCEL-R6"
+   (nếu vẫn thấy R5/R4 → deployment chưa chạy code mới → làm lại
+   Bước 1+2, kiểm tra đủ file ở mục 4 của Bước 1).
+2. Mở trang đăng ký → đăng ký tài khoản THỬ (CCCD mới) → phải
+   thành công, KHÔNG còn báo "Phiên đăng nhập hết hạn".
+   ⚠️ Nếu CCCD đã đăng ký rồi → hệ thống báo "Số CCCD này đã được
+   đăng ký" (409 — đúng logic) → dùng tab ĐĂNG NHẬP.
+3. Đăng nhập admin → tạo đề/xem kết quả; mở thư mục Drive
+   https://drive.google.com/drive/u/0/folders/1kvdJX6Va5OcS_OOQ8JN7hYh3aRRSFR5M
+   → dữ liệu đổ vào usersVercel.json / resultsVercel.json, còn
+   users.json / results.json GIỮ NGUYÊN (bên render.com không bị
+   động đến).
+4. Vào thi thử → nộp bài → kết quả lưu bình thường.
 
 ================================================================
  NHẬN DIỆN NHANH CÁC TRIỆU CHỨNG
 ================================================================
-- /api/health thấy "build": "OES-VERCEL-R4" → mới bản R4, chưa R5 → upload lại.
+- /api/health thấy "build": "OES-VERCEL-R5"/"R4" → deployment cũ →
+  làm Bước 1 (đủ file) + Bước 2 (Redeploy không cache).
+- /api/health trả 401 "Phiên đăng nhập hết hạn..." → file mới thiếu
+  trong deploy → Bước 1 + Bước 2. (Bản R6 trở lên sẽ TỰ LÀNH phần
+  lớn trường hợp này, và nếu không tự lành sẽ trả
+  OES_ROUTING_MISMATCH kèm hướng dẫn thay vì 401 gây hiểu lầm.)
+- Nhận 500 {"error":"OES_ROUTING_MISMATCH"} → deploy thiếu file →
+  làm Bước 1 + Bước 2 (thông báo lỗi đã chỉ rõ việc cần làm).
 - Nộp bài không lưu / Drive báo lỗi dung lượng → thiếu 3 file
-  *Vercel.json trong thư mục → làm lại Bước 0.
-- /api/health trả 401 "Phiên đăng nhập hết hạn..." → repo còn thiếu
-  file bản mới (public.routes.js...) → dùng CÁCH A upload toàn bộ.
-- Trang chủ 404 → deployment bị xóa/chưa có bản production → xem tab Deployments.
-- 500 FUNCTION_INVOCATION_FAILED → src/app.js chưa export hàm → upload toàn bộ theo CÁCH A.
+  *Vercel.json trong thư mục Drive (làm theo guide R5 Bước 0:
+  tạo usersVercel.json / examsVercel.json / resultsVercel.json —
+  nội dung [] — upload vào thư mục; KHÔNG đụng file gốc).
+- Trang chủ 404 → deployment bị xóa/chưa có bản production → tab Deployments.
+- 500 FUNCTION_INVOCATION_FAILED → src/app.js chưa export hàm →
+  upload toàn bộ theo Bước 1.

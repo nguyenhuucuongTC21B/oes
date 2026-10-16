@@ -492,9 +492,9 @@ FUNCTION_INVOCATION_FAILED"), phải đưa file mới lên repo trước:
 2. Mở repo GitHub của bạn (vd `nguyenhuucuongTC21B/oes`) → **Add file → Upload files**.
 3. Kéo thả **toàn bộ file + thư mục** trong bản giải nén vào ô upload (GitHub tự ghi đè
    file trùng tên; nếu bị chặn vì "exceeds 100 files" thì upload theo từng đợt nhỏ).
-4. Gõ nội dung commit (vd `Update OES R4 - fix session het han`) → **Commit changes**.
+4. Gõ nội dung commit (vd `Update OES R6 - tu phuc hoi duong dan`) → **Commit changes**.
 5. Vercel tự deploy commit mới — kiểm tra mã commit trong deployment phải **khác** mã cũ.
-6. Mở `<domain>/api/health` — thấy `"build": "OES-VERCEL-R5"` là bản vá đã chạy thật.
+6. Mở `<domain>/api/health` — thấy `"build": "OES-VERCEL-R6"` là bản vá đã chạy thật.
 
 ### Cách B — Vercel CLI (không cần GitHub)
 
@@ -545,9 +545,21 @@ Muốn khởi điểm với dữ liệu sẵn có của bản render.com: tải 
 trên bản kia; bài nộp, đề thi cũng tách biệt hoàn toàn.
 
 **Cách xác minh bản code mới đã chạy thật trên Vercel?** Mở `<domain>/api/health` — nếu JSON
-chứa `"build": "OES-VERCEL-R5"` tức bản sửa lỗi "Invalid export / FUNCTION_INVOCATION_FAILED"
-đã được deploy thành công. Nếu thấy 404, JSON khác, hoặc không có trường `build` → Vercel
+chứa `"build": "OES-VERCEL-R6"` tức các bản sửa lỗi "Invalid export / FUNCTION_INVOCATION_FAILED"
+(R3–R4), tách dữ liệu `*Vercel.json` (R5) và tự phục hồi đường dẫn (R6) đã được deploy thành
+công. Nếu thấy 404, JSON khác, hoặc không có trường `build` → Vercel
 vẫn đang chạy **code cũ trong repo GitHub** (xem câu tiếp theo).
+
+**Mọi API trả 401 "Phiên đăng nhập hết hạn..." kể cả trang ĐĂNG KÝ?** Đây là triệu chứng
+bản deploy chạy THIẾU file (repo được cập nhật một nửa — ví dụ còn `api/index.js` cũ):
+request bị đưa vào lambda với đường dẫn `/api/index` thay vì đường dẫn thật, không route nào
+khớp nên rơi vào nhóm route yêu cầu đăng nhập → 401 cho tất cả. Từ bản R6, hệ thống TỰ PHỤC
+HỒI đường dẫn gốc từ header định tuyến của Vercel (log sẽ in
+`[oes] Phuc hoi duong dan goc (routing mismatch)`), nên phần lớn trường hợp trộn lẫn vẫn chạy
+đúng; nếu không khôi phục được, API trả `500 {"error":"OES_ROUTING_MISMATCH"}` kèm hướng dẫn
+cụ thể thay vì 401 gây hiểu lầm. Cách xử lý triệt để: upload **toàn bộ** file trong bản zip
+mới lên GitHub (phải có đủ `api/index.js`, `vercel.json`, `src/**`) rồi Redeploy **không dùng
+Build Cache** — xem `CẬP-NHẬT-LÊN-GITHUB.txt`.
 
 **Vercel vẫn báo lỗi cũ dù tôi đã Redeploy — sửa thế nào?** Redeploy chỉ build lại **code
 hiện có trên GitHub**, không thay được code. Bạn phải đưa file mới lên repo: tải
@@ -569,7 +581,7 @@ và chạy được. Nếu bạn tự chỉnh code, nhớ giữ nguyên quy tắ
 
 **Truy cập ra "500 FUNCTION_INVOCATION_FAILED" (có Request ID kiểu hkg1::...)?** Nghĩa là
 function bị crash lúc chạy. Thứ tự kiểm tra: (1) mở `<domain>/api/health` — không có
-`"build": "OES-VERCEL-R5"` ⇒ repo chưa có code mới, cập nhật lại theo câu trên; (2) đã có
+`"build": "OES-VERCEL-R6"` ⇒ repo chưa có code mới, cập nhật lại theo câu trên; (2) đã có
 marker mà lỗi ở request cụ thể ⇒ vào Dashboard → deployment mới nhất → **Runtime Logs**, lọc
 theo Request ID đó, đọc dòng lỗi đầu tiên: nếu là lỗi khởi tạo Drive (thiếu/misent env var)
 → sửa Environment Variables rồi Redeploy; bản code mới cũng trả trang JSON chẩn đoán

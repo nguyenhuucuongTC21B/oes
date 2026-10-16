@@ -12,11 +12,12 @@ const router = express.Router();
 
 /**
  * Nhãn phiên bản build — dùng để xác minh code mới đã được deploy:
- * mở <domain>/api/health, nếu thấy "build": "OES-VERCEL-R5" tức bản sửa lỗi
- * "Phiên đăng nhập hết hạn hoặc không hợp lệ" (R4) + tách file dữ liệu riêng
- * usersVercel.json / examsVercel.json / resultsVercel.json (R5) đã chạy thật.
+ * mở <domain>/api/health, nếu thấy "build": "OES-VERCEL-R6" tức bản R5 (tách
+ * file dữ liệu usersVercel.json / examsVercel.json / resultsVercel.json) +
+ * R6 (tự phục hồi đường dẫn gốc khi deploy trộn lẫn — hết lỗi "mọi API trả
+ * 401 Phiên hết hạn") đã chạy thật.
  */
-const BUILD_TAG = 'OES-VERCEL-R5';
+const BUILD_TAG = 'OES-VERCEL-R6';
 
 /** Số liệu tuyên truyền chỉ chứa con số tổng hợp, không chứa thông tin cá nhân. */
 router.get('/stats', (req, res) => {

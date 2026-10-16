@@ -39,6 +39,72 @@ function defaultEnsureReady() {
   return defaultReadyPromise;
 }
 
+/* ----------------------------------------------------------------------
+ * PHỤC HỒI ĐƯỜNG DẪN GỐC (R6) — chống lỗi "mọi API trả 401 Phiên hết hạn".
+ *
+ * Bối cảnh: khi repo GitHub được cập nhật THIẾU file (ví dụ vẫn còn
+ * api/index.js cũ trong khi src/ đã là bản mới), cách định tuyến của Vercel
+ * có thể đưa request vào lambda với req.url = '/api/index' (đích của
+ * rewrite) thay vì đường dẫn gốc. Khi đó KHÔNG route nào khớp, request rơi
+ * vào exam router (router.use(requireAuth)) → MỌI API trả 401 kèm câu
+ * "Phiên đăng nhập hết hạn..." — kể cả đăng ký/đăng nhập/health/stats, khiến
+ * chẩn đoán nhầm sang lỗi phiên (đã xảy ra thật trên deploy 16/10).
+ *
+ * Giải pháp 2 lớp:
+ *  1) Nếu thấy URL bị dịch chuyển về '/api/index', khôi phục đường dẫn thật
+ *     từ header định tuyến của Vercel (x-now-route-matches / x-forwarded-path)
+ *     rồi ghi đè req.url — hệ thống chạy ĐÚNG dù deploy trộn lẫn.
+ *  2) Nếu không khôi phục được: trả JSON chẩn đoán OES_ROUTING_MISMATCH chỉ
+ *     rõ nguyên nhân + cách xử lý, thay vì 401 gây hiểu lầm.
+ * ---------------------------------------------------------------------- */
+const ROUTE_DEST_PATH = '/api/index';
+
+/** Giải mã header x-now-route-matches dạng "1=auth%2Fregister&2=x" → mảng nhóm. */
+function decodeRouteMatches(raw) {
+  const groups = [];
+  String(raw)
+    .split('&')
+    .forEach((part) => {
+      const eq = part.indexOf('=');
+      if (eq === -1) return;
+      const key = Number.parseInt(part.slice(0, eq), 10);
+      if (!Number.isFinite(key)) return;
+      let val = part.slice(eq + 1);
+      try {
+        val = decodeURIComponent(val);
+      } catch {
+        /* giữ nguyên giá trị thô nếu không decode được */
+      }
+      groups[key] = val;
+    });
+  return groups.filter(Boolean);
+}
+
+/** Trả về đường dẫn gốc nếu khôi phục được, ngược lại null. */
+function recoverOriginalUrl(req) {
+  const rawUrl = String(req.url || '');
+  const rawPath = rawUrl.split('?')[0];
+  if (rawPath !== ROUTE_DEST_PATH) return null; // URL bình thường — không can thiệp.
+
+  // ① Header "đường dẫn gốc" nếu runtime/proxy cung cấp.
+  const forwarded =
+    req.headers['x-forwarded-path'] || req.headers['x-vercel-original-path'];
+  if (typeof forwarded === 'string' && forwarded.startsWith('/') && forwarded !== ROUTE_DEST_PATH) {
+    return forwarded;
+  }
+
+  // ② Khôi phục từ capture group của route match:
+  //    source "/(.*)"  + path /api/health   → 1=api/health   → '/api/health'
+  //    source "/api/(.*)" + path /api/health → 1=health       → '/api/health'
+  const groups = decodeRouteMatches(req.headers['x-now-route-matches']);
+  if (groups.length > 0) {
+    const joined = groups.join('').replace(/^\/+/, '');
+    const candidate = /^api\//.test(joined) ? '/' + joined : '/api/' + joined;
+    return candidate;
+  }
+  return null;
+}
+
 /**
  * @param {() => Promise<void>} [ensureReady] — hàm lazy-boot (api/index.js truyền
  *        vào khi chạy trên Vercel; server.js tự init trước listen nên không cần).
@@ -48,6 +114,42 @@ function buildApp(ensureReady) {
 
   app.disable('x-powered-by');
   app.use(express.json({ limit: '1mb' }));
+
+  // R6 — Phục hồi đường dẫn gốc trước MỌI thứ khác (kể cả lazy boot).
+  app.use((req, res, next) => {
+    const recovered = recoverOriginalUrl(req);
+    if (recovered) {
+      const qIdx = String(req.url || '').indexOf('?');
+      const query = qIdx === -1 ? '' : String(req.url).slice(qIdx);
+      console.log(
+        `[oes] Phuc hoi duong dan goc (routing mismatch): ${req.url} -> ${recovered}${query}`
+      );
+      req.url = recovered + query;
+      req.originalUrl = recovered + query;
+      req.oesUrlRecovered = true;
+      return next();
+    }
+    // Không khôi phục được mà request vẫn trúng đích rewrite → chẩn đoán rõ.
+    if (String(req.url || '').split('?')[0] === ROUTE_DEST_PATH) {
+      console.error(
+        '[oes] OES_ROUTING_MISMATCH: request den dich "/api/index" ma khong co header duong dan goc. ' +
+          'Deploy dang thieu file moi (api/index.js hoac vercel.json la ban cu).'
+      );
+      return res.status(500).json({
+        ok: false,
+        error: 'OES_ROUTING_MISMATCH',
+        message:
+          'Hệ thống nhận request tại đích định tuyến "/api/index" thay vì đường dẫn API gốc. ' +
+          'Đây KHÔNG phải lỗi phiên đăng nhập — bản deploy đang chạy thiếu file hoặc đang dùng ' +
+          'api/index.js / vercel.json cũ (repo được cập nhật một nửa).',
+        hint:
+          'Upload lại TOÀN BỘ nội dung bản mới (Cách A trong CẬP-NHẬT-LÊN-GITHUB.txt — phải có đủ ' +
+          'api/index.js, vercel.json, src/**) hoặc vào Vercel > Deployments > Redeploy và TẮT ' +
+          '"Use existing Build Cache". Sau deploy, mở /api/health thấy "build": "OES-VERCEL-R6" là thành công.',
+      });
+    }
+    next();
+  });
 
   // Lazy boot: request đầu tiên của mỗi instance đợi khởi tạo dataStore.
   if (ensureReady) {

@@ -386,7 +386,11 @@ function getSyncInfo() {
       file: fileNameOf(key),
       records: s.data ? s.data.length : 0,
       lastSyncedAt: s.lastSyncedAt || null,
-      pending: false,
+      // R6: serverless không còn hàng đợi pending kiểu render.com, nhưng vẫn
+      // cần cờ "chưa sync xong" cho dashboard + /admin/sync: một file được coi
+      // là pending khi lần ghi/nạp gần nhất LỖI và chưa có lần ghi thành công
+      // nào gỡ lỗi đó (saveNow thành công tự xóa lastSyncError).
+      pending: Boolean(s.lastSyncError),
       lastError: s.lastSyncError || null,
       cacheAgeSeconds: s.loadedAt ? Math.floor((Date.now() - s.loadedAt) / 1000) : null,
     };
