@@ -62,6 +62,9 @@
       <button data-section="teams" class="nav-btn flex items-center gap-2.5 px-4 py-2.5 rounded-xl text-sm font-semibold whitespace-nowrap transition">
         <span>🤝</span> Điểm tập thể
       </button>
+      <button data-section="news" class="nav-btn flex items-center gap-2.5 px-4 py-2.5 rounded-xl text-sm font-semibold whitespace-nowrap transition">
+        <span>📰</span> Tin bài
+      </button>
       <button data-section="site" class="nav-btn flex items-center gap-2.5 px-4 py-2.5 rounded-xl text-sm font-semibold whitespace-nowrap transition">
         <span>🎨</span> Giao diện &amp; giờ nhận bài
       </button>
@@ -205,6 +208,57 @@
         <p class="mt-3 text-[11px] text-slate-400 leading-relaxed">“Nhóm tester” không xét giải tập thể (hiển thị cuối bảng). Điểm TB thang 60 của đề 30 câu tương ứng mỗi câu 2 điểm. Bấm “In bảng” để in bảng điểm tập thể hiện tại.</p>
       </section>
 
+      <!-- ========== TIN BÀI — TIN TỨC & TUYÊN TRUYỀN (R10b) ========== -->
+      <section id="section-news" class="admin-section hidden">
+        <div class="flex items-end justify-between flex-wrap gap-3">
+          <div>
+            <h1 class="font-serif text-2xl font-bold text-slate-900">Viết tin bài — Tin tức &amp; Tuyên truyền</h1>
+            <p class="text-sm text-slate-500 mt-1">Tin bài hiển thị NGAY tại mục “Tin tức — Tuyên truyền” trên trang chủ (mọi thí sinh thấy trong tối đa 15 giây).</p>
+          </div>
+          <button id="btn-new-article" class="bg-flag-600 hover:bg-flag-700 text-white font-bold text-sm px-5 py-2.5 rounded-xl transition">✎ Viết tin bài mới</button>
+        </div>
+        <form id="form-news" class="hidden mt-5 bg-white rounded-2xl border border-slate-200 p-6 space-y-4" novalidate>
+          <div class="grid sm:grid-cols-[1fr,170px,110px] gap-3">
+            <div>
+              <label class="block text-xs font-semibold text-slate-600 mb-1">Tiêu đề tin bài *</label>
+              <input id="nn-title" class="field" type="text" maxlength="300" placeholder="VD: Ra mắt Cuộc thi Trắc nghiệm Tìm hiểu Pháp luật năm 2026" />
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-slate-600 mb-1">Chuyên mục</label>
+              <input id="nn-category" class="field" type="text" maxlength="60" placeholder="VD: An ninh mạng" />
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-slate-600 mb-1">Biểu tượng</label>
+              <input id="nn-emoji" class="field" type="text" maxlength="16" placeholder="📰" />
+            </div>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">Tóm tắt ngắn (hiển thị trên thẻ tin — bỏ trống sẽ tự cắt từ nội dung)</label>
+            <textarea id="nn-excerpt" class="field" rows="2" maxlength="1200"></textarea>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">Nội dung tin bài * (cho phép HTML — bọc mỗi đoạn trong &lt;p&gt;...&lt;/p&gt;)</label>
+            <textarea id="nn-content" class="field" rows="10" placeholder="<p>Đoạn 1...</p><p>Đoạn 2...</p>"></textarea>
+          </div>
+          <div class="flex flex-wrap gap-5 text-sm">
+            <label class="flex items-center gap-2 cursor-pointer font-semibold text-slate-700">
+              <input id="nn-published" type="checkbox" class="accent-red-700 w-4 h-4" checked />
+              Đăng ngay lên trang chủ
+            </label>
+            <label class="flex items-center gap-2 cursor-pointer font-semibold text-slate-700">
+              <input id="nn-pinned" type="checkbox" class="accent-red-700 w-4 h-4" />
+              ★ Ghim lên đầu danh sách
+            </label>
+          </div>
+          <p id="nn-error" class="hidden text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2"></p>
+          <div class="flex gap-3">
+            <button type="button" onclick="closeNewsForm()" class="px-5 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-semibold text-sm hover:bg-slate-50">Đóng</button>
+            <button id="nn-submit" type="submit" class="flex-1 px-6 py-2.5 rounded-xl bg-flag-600 hover:bg-flag-700 text-white font-bold text-sm">💾 Lưu tin bài</button>
+          </div>
+        </form>
+        <div id="news-list" class="mt-5 space-y-3"></div>
+      </section>
+
       <!-- ========== GIAO DIỆN & GIỜ NHẬN BÀI (R10) ========== -->
       <section id="section-site" class="admin-section hidden">
         <h1 class="font-serif text-2xl font-bold text-slate-900">Chỉnh sửa giao diện &amp; thời gian nhận bài dự thi</h1>
@@ -268,6 +322,32 @@
               <div>
                 <label class="block text-xs font-semibold text-slate-600 mb-1">Khối “Lưu ý” trong Thể lệ (HTML)</label>
                 <textarea id="sc-rules" class="field" rows="4"></textarea>
+              </div>
+            </div>
+          </div>
+          <div class="bg-white rounded-2xl border border-slate-200 p-6">
+            <h2 class="font-bold text-slate-900">🦶 Chân trang (Footer)</h2>
+            <p class="text-xs text-slate-400 mt-1">R10b — chỉnh chi tiết chân trang. Bỏ trống ô nào thì ô đó GIỮ nội dung gốc. Danh sách dùng HTML: mỗi dòng bọc trong &lt;li&gt;...&lt;/li&gt;.</p>
+            <div class="mt-4 grid gap-3">
+              <div>
+                <label class="block text-xs font-semibold text-slate-600 mb-1">Cột 1 — Giới thiệu chân trang (HTML)</label>
+                <textarea id="sc-footer-about" class="field" rows="3"></textarea>
+              </div>
+              <div>
+                <label class="block text-xs font-semibold text-slate-600 mb-1">Cột 1 — Danh sách thành viên thực hiện (HTML &lt;li&gt;)</label>
+                <textarea id="sc-footer-credits" class="field" rows="4" placeholder="<li>Xây dựng ý tưởng: ...</li><li>Coder: ...</li>"></textarea>
+              </div>
+              <div>
+                <label class="block text-xs font-semibold text-slate-600 mb-1">Cột 2 — Liên hệ Ban Tổ chức (HTML &lt;li&gt;)</label>
+                <textarea id="sc-footer-contact" class="field" rows="4" placeholder="<li>📍 Địa chỉ...</li><li>✉️ Email...</li><li>☎️ Điện thoại...</li>"></textarea>
+              </div>
+              <div>
+                <label class="block text-xs font-semibold text-slate-600 mb-1">Cột 3 — Liên kết nhanh (HTML &lt;li&gt;)</label>
+                <textarea id="sc-footer-links" class="field" rows="3" placeholder="<li><a href='/login.html'>Đăng ký / Đăng nhập</a></li>"></textarea>
+              </div>
+              <div>
+                <label class="block text-xs font-semibold text-slate-600 mb-1">Dòng bản quyền cuối trang (văn bản thường)</label>
+                <input id="sc-footer-copyright" class="field" type="text" placeholder="© 2026 Ban Tổ chức ... Mọi quyền được bảo lưu." />
               </div>
             </div>
           </div>

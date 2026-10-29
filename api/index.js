@@ -9,24 +9,28 @@
  *  Chi cac npm package trong package.json (express, googleapis)
  *  duoc nap tu node_modules - Vercel tu cai theo package.json.
  *
- *  R10a (2026-10): VAN SU CO MAT DE NGAU NHIEN —
- *   (1) cam tu nap bo de mau khi boot KHONG doc duoc Drive (nguyen nhan lam
- *       danh sach de thi trong + tron de mau vao ngan hang that);
- *   (2) giu fileId khi tim thay file nhung download loi (chi update+merge,
- *       khong bao gio tao file thu hai cung ten); 
- *   (3) chan moi thao tac GHI khi instance chua doc duoc Drive (503) — nạp
- *       de mau, sua/xoa de, sua user, luu site config, dang ky;
- *   (4) de ao random30 quay lai DAU danh sach GET /exams kem trang thai
- *       pool (canh bao khi chua nap exam_c6) — ca quiz.html lẫn Ban quan tri
- *       đeu thấy "Đề thi ngẫu nhiên 30 câu".
+ *  R10b (2026-10): TIN BÀI + FOOTER —
+ *   (1) Admin viết TIN BÀI (mục mới "Tin bài" trong Ban quản trị): tiêu đề,
+ *       chuyên mục, biểu tượng, tóm tắt (tự sinh nếu bỏ trống), nội dung HTML,
+ *       đăng ngay / lưu nháp, ghim lên đầu; tin bài hiển thị NGAY ở div
+ *       "Tin tức — Tuyên truyền" trên trang chủ (khi chưa có tin nào thì giữ
+ *       3 tin mặc định nhúng sẵn); lưu trong bản ghi đặc biệt "__news__" của
+ *       usersVercel.json (KHONG tao file moi tren Drive), bị ẩn khỏi danh
+ *       sách người dùng + chặn sửa/xóa như bản ghi hệ thống;
+ *   (2) chỉnh sửa chi tiết FOOTER trong mục Giao diện: giới thiệu cột 1,
+ *       danh sách thành viên thực hiện, liên hệ Ban Tổ chức, liên kết nhanh,
+ *       dòng bản quyền (bỏ trống = giữ nội dung gốc);
+ *   (3) giữ nguyên toàn bộ R10a: cấm nạp đề mẫu khi boot KHONG doc duoc Drive,
+ *       giữ fileId khi download lỗi (không tao file thu hai), chan moi thao tac
+ *       GHI khi instance chua doc duoc Drive (503), de ao random30 dau danh sach.
  *  Ke tu R10: dropdown 25 don vi + Admin mac dinh 048085006405 + 3 thang
  *  diem 10/100/60 (ca nhan & tap the) + Admin chinh sua giao dien & thoi
  *  gian nhan bai (site config trong ban ghi "__siteConfig__" cua
- *  usersVercel.json — KHONG tao file moi tren Drive) + in phieu ket qua.
+ *  usersVercel.json) + in phieu ket qua.
  *
  *  CACH DUNG: thay TOAN BO noi dung api/index.js tren GitHub bang
  *  noi dung file nay -> Commit -> Vercel tu build -> kiem tra
- *  /api/health phai tra "build":"OES-VERCEL-R10a".
+ *  /api/health phai tra "build":"OES-VERCEL-R10b".
  *
  *  (Ban bundle sinh tu dong boi scripts/build_single.js -
  *   KHONG sua tay file nay; sua src/ roi build lai.)
@@ -2237,6 +2241,7 @@ var require_siteConfig = __commonJS({
     var dataStore = require_dataStore();
     var { statusOf } = require_examWindow();
     var SITE_CONFIG_KEY = "__siteConfig__";
+    var SYSTEM_KEYS = [SITE_CONFIG_KEY, "__news__"];
     var DEFAULTS = {
       marquee: "",
       // Băng rôn khẩu hiệu chạy ngang (rỗng = khẩu hiệu mặc định)
@@ -2258,8 +2263,19 @@ var require_siteConfig = __commonJS({
       // Hạn nhận bài dự thi — mốc đếm ngược trên trang chủ (ISO)
       intakeOpenAt: "",
       // Giờ MỞ CỬA nhận bài dự thi (ISO, rỗng = luôn mở)
-      intakeCloseAt: ""
+      intakeCloseAt: "",
       // Giờ ĐÓNG CỬA nhận bài dự thi (ISO, rỗng = không đóng)
+      // R10b — CHI TIẾT CHÂN TRANG (footer): rỗng = giữ nguyên nội dung gốc.
+      footerAbout: "",
+      // Cột 1 — đoạn giới thiệu chân trang (cho phép HTML)
+      footerCredits: "",
+      // Cột 1 — danh sách thành viên thực hiện (HTML <li>)
+      footerContact: "",
+      // Cột 2 — liên hệ Ban Tổ chức (HTML <li>)
+      footerLinks: "",
+      // Cột 3 — liên kết nhanh (HTML <li>)
+      footerCopyright: ""
+      // Dòng bản quyền cuối trang (văn bản thường)
     };
     var MAX_LEN = {
       marquee: 1e3,
@@ -2269,7 +2285,13 @@ var require_siteConfig = __commonJS({
       bannerUrl: 1500,
       introHtml: 2e4,
       rulesHtml: 2e4,
-      principleHtml: 2e4
+      principleHtml: 2e4,
+      // R10b — footer
+      footerAbout: 5e3,
+      footerCredits: 5e3,
+      footerContact: 5e3,
+      footerLinks: 3e3,
+      footerCopyright: 500
     };
     function record() {
       try {
@@ -2312,45 +2334,9 @@ var require_siteConfig = __commonJS({
       return dataStore.saveNow("users");
     }
     function isRealUser(u) {
-      return Boolean(u && u.cccd && u.cccd !== SITE_CONFIG_KEY);
+      return Boolean(u && u.cccd && !SYSTEM_KEYS.includes(u.cccd));
     }
     module2.exports = { getConfig, setConfig, sanitizePatch, intakeStatus, DEFAULTS, isRealUser, SITE_CONFIG_KEY };
-  }
-});
-
-// oes/src/routes/public.routes.js
-var require_public_routes = __commonJS({
-  "oes/src/routes/public.routes.js"(exports2, module2) {
-    "use strict";
-    var express = require("express");
-    var dataStore = require_dataStore();
-    var siteConfig = require_siteConfig();
-    var driveClient = require_driveClient();
-    var router = express.Router();
-    var BUILD_TAG = "OES-VERCEL-R10a";
-    router.get("/stats", (req, res) => {
-      const results = dataStore.get("results");
-      const avgScore = results.length > 0 ? Math.round(results.reduce((s, r) => s + (Number(r.score) || 0), 0) / results.length * 100) / 100 : 0;
-      res.json({
-        users: dataStore.count("users"),
-        exams: dataStore.count("exams"),
-        results: results.length,
-        avgScore
-      });
-    });
-    router.get("/site-config", (req, res) => {
-      res.json({ config: siteConfig.getConfig() });
-    });
-    router.get("/health", (req, res) => {
-      res.json({
-        ok: true,
-        build: BUILD_TAG,
-        mode: driveClient.getMode(),
-        uptimeSeconds: Math.floor(process.uptime()),
-        sync: dataStore.getSyncInfo()
-      });
-    });
-    module2.exports = router;
   }
 });
 
@@ -2432,6 +2418,162 @@ var require_crypto = __commonJS({
       TOKEN_TTL_SECONDS,
       ATTEMPT_TTL_SECONDS
     };
+  }
+});
+
+// oes/src/store/newsStore.js
+var require_newsStore = __commonJS({
+  "oes/src/store/newsStore.js"(exports2, module2) {
+    "use strict";
+    var dataStore = require_dataStore();
+    var { newId } = require_crypto();
+    var NEWS_KEY = "__news__";
+    var MAX_ITEMS = 60;
+    var FIELD_MAX = {
+      title: 300,
+      category: 60,
+      emoji: 16,
+      excerpt: 1200,
+      content: 2e4
+    };
+    function record() {
+      try {
+        return dataStore.get("users").find((u) => u && u.cccd === NEWS_KEY) || null;
+      } catch {
+        return null;
+      }
+    }
+    function sortNews(items) {
+      return items.slice().sort((a, b) => {
+        if (!!b.pinned !== !!a.pinned) return b.pinned ? 1 : -1;
+        return String(b.createdAt || "").localeCompare(String(a.createdAt || ""));
+      });
+    }
+    function all() {
+      const rec = record();
+      return sortNews(rec && Array.isArray(rec.items) ? rec.items : []);
+    }
+    function published() {
+      return all().filter((n) => n && n.published);
+    }
+    function stripHtml(html) {
+      return String(html || "").replace(/<[^>]*>/g, " ").replace(/&nbsp;/g, " ").replace(/\s+/g, " ").trim();
+    }
+    function sanitizeArticle(body = {}) {
+      const data = {};
+      const title = String(body.title ?? "").trim();
+      if (!title) return { ok: false, message: "Tiêu đề tin bài không được để trống." };
+      if (title.length > FIELD_MAX.title) {
+        return { ok: false, message: `Tiêu đề quá dài (tối đa ${FIELD_MAX.title} ký tự).` };
+      }
+      data.title = title;
+      const content = String(body.content ?? "").trim();
+      if (!content) return { ok: false, message: "Nội dung tin bài không được để trống." };
+      if (content.length > FIELD_MAX.content) {
+        return { ok: false, message: `Nội dung quá dài (tối đa ${FIELD_MAX.content} ký tự).` };
+      }
+      data.content = content;
+      data.category = String(body.category ?? "").trim().slice(0, FIELD_MAX.category);
+      data.emoji = String(body.emoji ?? "").trim().slice(0, FIELD_MAX.emoji) || "📰";
+      let excerpt = String(body.excerpt ?? "").trim().slice(0, FIELD_MAX.excerpt);
+      if (!excerpt) {
+        const flat = stripHtml(content);
+        excerpt = flat.length > 180 ? `${flat.slice(0, 180)}…` : flat;
+      }
+      data.excerpt = excerpt;
+      data.published = Boolean(body.published);
+      data.pinned = Boolean(body.pinned);
+      return { ok: true, data };
+    }
+    async function create(cleanData, authorCccd) {
+      const users = dataStore.get("users");
+      let rec = users.find((u) => u && u.cccd === NEWS_KEY);
+      if (!rec) {
+        rec = { cccd: NEWS_KEY, role: "news", items: [] };
+        users.push(rec);
+      }
+      if (!Array.isArray(rec.items)) rec.items = [];
+      const now = (/* @__PURE__ */ new Date()).toISOString();
+      const article = {
+        id: newId("news"),
+        ...cleanData,
+        createdBy: authorCccd || null,
+        createdAt: now,
+        updatedAt: now
+      };
+      rec.items.unshift(article);
+      if (rec.items.length > MAX_ITEMS) rec.items.length = MAX_ITEMS;
+      const sync = await dataStore.saveNow("users");
+      return { article, sync };
+    }
+    async function update(id, cleanData) {
+      const rec = record();
+      const item = rec && Array.isArray(rec.items) ? rec.items.find((n) => n.id === id) : null;
+      if (!item) return { notFound: true };
+      Object.assign(item, cleanData, { updatedAt: (/* @__PURE__ */ new Date()).toISOString() });
+      const sync = await dataStore.saveNow("users");
+      return { article: item, sync };
+    }
+    async function remove(id) {
+      const rec = record();
+      if (!rec || !Array.isArray(rec.items)) return { notFound: true };
+      const idx = rec.items.findIndex((n) => n.id === id);
+      if (idx === -1) return { notFound: true };
+      rec.items.splice(idx, 1);
+      const sync = await dataStore.saveNow("users");
+      return { sync };
+    }
+    module2.exports = {
+      NEWS_KEY,
+      FIELD_MAX,
+      all,
+      published,
+      stripHtml,
+      sanitizeArticle,
+      create,
+      update,
+      remove
+    };
+  }
+});
+
+// oes/src/routes/public.routes.js
+var require_public_routes = __commonJS({
+  "oes/src/routes/public.routes.js"(exports2, module2) {
+    "use strict";
+    var express = require("express");
+    var dataStore = require_dataStore();
+    var siteConfig = require_siteConfig();
+    var newsStore = require_newsStore();
+    var driveClient = require_driveClient();
+    var router = express.Router();
+    var BUILD_TAG = "OES-VERCEL-R10b";
+    router.get("/stats", (req, res) => {
+      const results = dataStore.get("results");
+      const avgScore = results.length > 0 ? Math.round(results.reduce((s, r) => s + (Number(r.score) || 0), 0) / results.length * 100) / 100 : 0;
+      res.json({
+        users: dataStore.count("users"),
+        exams: dataStore.count("exams"),
+        results: results.length,
+        avgScore
+      });
+    });
+    router.get("/site-config", (req, res) => {
+      res.json({ config: siteConfig.getConfig() });
+    });
+    router.get("/news", (req, res) => {
+      res.json({ news: newsStore.published().slice(0, 12) });
+    });
+    router.get("/health", (req, res) => {
+      res.json({
+        ok: true,
+        build: BUILD_TAG,
+        mode: driveClient.getMode(),
+        uptimeSeconds: Math.floor(process.uptime()),
+        sync: dataStore.getSyncInfo()
+      });
+    });
+    module2.exports = router;
   }
 });
 
@@ -3207,6 +3349,7 @@ var require_admin_routes = __commonJS({
     var express = require("express");
     var dataStore = require_dataStore();
     var siteConfig = require_siteConfig();
+    var newsStore = require_newsStore();
     var driveClient = require_driveClient();
     var { requireAuth, requireAdmin } = require_auth();
     var { hashPassword, verifyPassword, newId } = require_crypto();
@@ -3480,6 +3623,50 @@ var require_admin_routes = __commonJS({
           synced: sync.synced,
           config: siteConfig.getConfig()
         });
+      } catch (err) {
+        next(err);
+      }
+    });
+    router.get("/news", (req, res) => {
+      res.json({ news: newsStore.all() });
+    });
+    router.post("/news", async (req, res, next) => {
+      try {
+        if (guardWriteStore("users", res)) return;
+        const check = newsStore.sanitizeArticle(req.body);
+        if (!check.ok) return res.status(400).json({ message: check.message });
+        const { article, sync } = await newsStore.create(check.data, req.user.cccd);
+        res.status(201).json({
+          message: `Đã ${article.published ? "đăng" : "lưu nháp"} tin bài "${article.title}".${syncSuffix(sync)}`,
+          synced: sync.synced,
+          article
+        });
+      } catch (err) {
+        next(err);
+      }
+    });
+    router.put("/news/:id", async (req, res, next) => {
+      try {
+        if (guardWriteStore("users", res)) return;
+        const check = newsStore.sanitizeArticle(req.body);
+        if (!check.ok) return res.status(400).json({ message: check.message });
+        const out = await newsStore.update(req.params.id, check.data);
+        if (out.notFound) return res.status(404).json({ message: "Không tìm thấy tin bài." });
+        res.json({
+          message: `Đã cập nhật tin bài "${out.article.title}".${syncSuffix(out.sync)}`,
+          synced: out.sync.synced,
+          article: out.article
+        });
+      } catch (err) {
+        next(err);
+      }
+    });
+    router.delete("/news/:id", async (req, res, next) => {
+      try {
+        if (guardWriteStore("users", res)) return;
+        const out = await newsStore.remove(req.params.id);
+        if (out.notFound) return res.status(404).json({ message: "Không tìm thấy tin bài." });
+        res.json({ message: `Đã xóa tin bài.${syncSuffix(out.sync)}`, synced: out.sync.synced });
       } catch (err) {
         next(err);
       }

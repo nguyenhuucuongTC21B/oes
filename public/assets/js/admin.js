@@ -37,6 +37,7 @@ function switchSection(name) {
   if (name === 'exams') renderExams();
   if (name === 'results') renderResults();
   if (name === 'teams') renderTeams();
+  if (name === 'news') renderNewsList();
   if (name === 'site') loadSiteForm();
 }
 for (const btn of document.querySelectorAll('.nav-btn')) {
@@ -934,6 +935,142 @@ function printPaper() {
   setTimeout(() => window.print(), 60);
 }
 
+/* ==================== R10b: TIN BÀI — TIN TỨC & TUYÊN TRUYỀN ==================== */
+let cacheNews = [];
+let editingNewsId = null;
+let newsFormBusy = false;
+
+async function renderNewsList() {
+  const host = document.getElementById('news-list');
+  try {
+    const d = await api('/admin/news');
+    cacheNews = d.news || [];
+  } catch (err) {
+    host.innerHTML = `<div class="rounded-xl bg-red-50 border border-red-200 p-4 text-sm text-red-700">${esc(err.message)}</div>`;
+    return;
+  }
+  if (!cacheNews.length) {
+    host.innerHTML = '<div class="bg-white rounded-2xl border border-slate-200 p-8 text-center text-slate-400 text-sm">Chưa có tin bài nào. Bấm “✎ Viết tin bài mới” để đăng tin đầu tiên lên mục Tin tức — Tuyên truyền của trang chủ.</div>';
+    return;
+  }
+  host.innerHTML = cacheNews
+    .map(
+      (n) => `
+      <div class="bg-white rounded-2xl border border-slate-200 p-4 flex flex-wrap items-center gap-3">
+        <span class="w-10 h-10 rounded-xl bg-flag-50 flex items-center justify-center text-xl shrink-0">${esc(n.emoji || '📰')}</span>
+        <div class="min-w-0 flex-1">
+          <div class="flex items-center gap-2 flex-wrap">
+            <p class="font-bold text-slate-900 truncate">${esc(n.title)}</p>
+            ${n.pinned ? '<span class="text-gold-600 text-xs font-bold" title="Tin được ghim lên đầu">★ Ghim</span>' : ''}
+            ${
+              n.published
+                ? '<span class="bg-emerald-50 text-emerald-700 font-bold px-2 py-0.5 rounded text-[11px]">Đã đăng</span>'
+                : '<span class="bg-slate-100 text-slate-500 font-bold px-2 py-0.5 rounded text-[11px]">Nháp</span>'
+            }
+          </div>
+          <p class="text-xs text-slate-400 mt-0.5">${esc(n.category || 'Tin tức')} · Cập nhật ${fmtDateTime(n.updatedAt || n.createdAt)}</p>
+        </div>
+        <div class="flex gap-2 shrink-0">
+          <button onclick="toggleNewsPublish('${esc(n.id)}')" class="px-3 py-2 rounded-lg border text-xs font-bold ${
+            n.published ? 'border-slate-200 text-slate-500 hover:bg-slate-50' : 'border-emerald-200 text-emerald-700 hover:bg-emerald-50'
+          }">${n.published ? 'Ẩn tin' : 'Đăng tin'}</button>
+          <button onclick="openNewsForm('${esc(n.id)}')" class="px-3 py-2 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 text-xs font-bold">Sửa</button>
+          <button onclick="deleteNews('${esc(n.id)}')" class="px-3 py-2 rounded-lg border border-red-200 text-red-600 hover:bg-red-50 text-xs font-bold">Xóa</button>
+        </div>
+      </div>`
+    )
+    .join('');
+}
+
+/** Đóng form viết tin (về trạng thái danh sách). */
+function closeNewsForm() {
+  editingNewsId = null;
+  document.getElementById('form-news').classList.add('hidden');
+}
+
+/** Mở form: id rỗng = viết tin mới; có id = sửa tin đang có. */
+function openNewsForm(id) {
+  const n = id ? cacheNews.find((x) => x.id === id) : null;
+  editingNewsId = n ? n.id : null;
+  document.getElementById('nn-title').value = n ? n.title : '';
+  document.getElementById('nn-category').value = n ? n.category || '' : '';
+  document.getElementById('nn-emoji').value = n ? n.emoji || '' : '';
+  document.getElementById('nn-excerpt').value = n ? n.excerpt || '' : '';
+  document.getElementById('nn-content').value = n ? n.content || '' : '';
+  document.getElementById('nn-published').checked = n ? !!n.published : true;
+  document.getElementById('nn-pinned').checked = n ? !!n.pinned : false;
+  document.getElementById('nn-error').classList.add('hidden');
+  document.getElementById('form-news').classList.remove('hidden');
+  document.getElementById('nn-title').focus();
+  document.getElementById('form-news').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+document.getElementById('btn-new-article').addEventListener('click', () => openNewsForm(null));
+
+document.getElementById('form-news').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  if (newsFormBusy) return;
+  newsFormBusy = true;
+  const btn = document.getElementById('nn-submit');
+  btn.disabled = true;
+  btn.textContent = 'Đang lưu...';
+  const body = {
+    title: document.getElementById('nn-title').value.trim(),
+    category: document.getElementById('nn-category').value.trim(),
+    emoji: document.getElementById('nn-emoji').value.trim(),
+    excerpt: document.getElementById('nn-excerpt').value.trim(),
+    content: document.getElementById('nn-content').value,
+    published: document.getElementById('nn-published').checked,
+    pinned: document.getElementById('nn-pinned').checked,
+  };
+  try {
+    const data = editingNewsId
+      ? await api(`/admin/news/${editingNewsId}`, { method: 'PUT', body })
+      : await api('/admin/news', { method: 'POST', body });
+    toast(data.message, data.synced === false ? 'info' : 'success');
+    if (data.synced === false) checkSyncStatus();
+    closeNewsForm();
+    await renderNewsList();
+  } catch (err) {
+    const el = document.getElementById('nn-error');
+    el.textContent = err.message;
+    el.classList.remove('hidden');
+  } finally {
+    newsFormBusy = false;
+    btn.disabled = false;
+    btn.textContent = '💾 Lưu tin bài';
+  }
+});
+
+/** Đăng / ẩn nhanh một tin bài (giữ nguyên nội dung). */
+async function toggleNewsPublish(id) {
+  const n = cacheNews.find((x) => x.id === id);
+  if (!n) return;
+  try {
+    const data = await api(`/admin/news/${id}`, {
+      method: 'PUT',
+      body: { ...n, published: !n.published },
+    });
+    toast(data.message, data.synced === false ? 'info' : 'success');
+    if (data.synced === false) checkSyncStatus();
+    await renderNewsList();
+  } catch (err) {
+    toast(err.message, 'error');
+  }
+}
+
+/** Xóa tin bài (có xác nhận). */
+function deleteNews(id) {
+  const n = cacheNews.find((x) => x.id === id);
+  if (!n) return;
+  askDelete(`Xóa tin bài “${n.title}”? Tin sẽ biến mất khỏi trang chủ ngay sau khi xóa.`, async () => {
+    const data = await api(`/admin/news/${id}`, { method: 'DELETE' });
+    toast(data.message, data.synced === false ? 'info' : 'success');
+    if (data.synced === false) checkSyncStatus();
+    await renderNewsList();
+  });
+}
+
 /* ==================== R10: CẤU HÌNH GIAO DIỆN & GIỜ NHẬN BÀI ==================== */
 let siteFormBusy = false;
 
@@ -953,6 +1090,12 @@ async function loadSiteForm() {
     document.getElementById('sc-intro').value = c.introHtml || '';
     document.getElementById('sc-principle').value = c.principleHtml || '';
     document.getElementById('sc-rules').value = c.rulesHtml || '';
+    // R10b — chi tiết chân trang (footer).
+    document.getElementById('sc-footer-about').value = c.footerAbout || '';
+    document.getElementById('sc-footer-credits').value = c.footerCredits || '';
+    document.getElementById('sc-footer-contact').value = c.footerContact || '';
+    document.getElementById('sc-footer-links').value = c.footerLinks || '';
+    document.getElementById('sc-footer-copyright').value = c.footerCopyright || '';
   } catch (err) {
     toast(err.message, 'error');
   }
@@ -989,6 +1132,12 @@ document.getElementById('form-site').addEventListener('submit', async (e) => {
     introHtml: document.getElementById('sc-intro').value,
     principleHtml: document.getElementById('sc-principle').value,
     rulesHtml: document.getElementById('sc-rules').value,
+    // R10b — chi tiết chân trang (footer).
+    footerAbout: document.getElementById('sc-footer-about').value,
+    footerCredits: document.getElementById('sc-footer-credits').value,
+    footerContact: document.getElementById('sc-footer-contact').value,
+    footerLinks: document.getElementById('sc-footer-links').value,
+    footerCopyright: document.getElementById('sc-footer-copyright').value,
   };
   try {
     const data = await api('/admin/site-config', { method: 'PUT', body });

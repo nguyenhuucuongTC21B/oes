@@ -15,7 +15,7 @@
 })();
 
 /* ------------------------------ Đếm ngược hạn thi ------------------------------ */
-let DEADLINE = new Date('2026-11-04T23:59:59+07:00').getTime();
+let DEADLINE = new Date('2026-12-31T23:59:59+07:00').getTime();
 let deadlineTimer = null;
 (function countdown() {
   const els = {
@@ -83,6 +83,12 @@ let deadlineTimer = null;
   if (cfg.introHtml) slotHtml('intro-body', cfg.introHtml);
   if (cfg.principleHtml) slotHtml('principle-body', cfg.principleHtml);
   if (cfg.rulesHtml) slotHtml('rules-note', cfg.rulesHtml);
+  // R10b — Chi tiết chân trang (footer): bỏ trống ô nào thì ô đó giữ nội dung gốc.
+  if (cfg.footerAbout) slotHtml('footer-about', cfg.footerAbout);
+  if (cfg.footerCredits) slotHtml('footer-credits', cfg.footerCredits);
+  if (cfg.footerContact) slotHtml('footer-contact', cfg.footerContact);
+  if (cfg.footerLinks) slotHtml('footer-links', cfg.footerLinks);
+  if (cfg.footerCopyright) slotHtml('footer-copyright', esc(cfg.footerCopyright));
   // Dòng mô tả khung giờ nhận bài + mốc đếm ngược.
   const intakeNote = document.getElementById('intake-note');
   if (intakeNote) {
@@ -168,3 +174,45 @@ function renderHeaderAuth() {
 
 renderHeaderAuth();
 loadStats();
+
+/* ------------------- R10b: TIN BÀI "TIN TỨC — TUYÊN TRUYỀN" ------------------- */
+/**
+ * Nạp tin bài do Admin viết (GET /api/news — công khai, chỉ tin đã đăng) và
+ * thay vào lưới thẻ tin trên trang chủ. Khi CHƯA có tin nào (hoặc lỗi mạng)
+ * giữ nguyên 3 tin mặc định nhúng sẵn trong trang — trang chủ không bao giờ
+ * trống mục Tin tức — Tuyên truyền.
+ */
+(async function loadNews() {
+  const grid = document.getElementById('news-grid');
+  if (!grid) return; // Trang tùy biến thiếu slot — bỏ qua an toàn.
+  let list = [];
+  try {
+    const d = await api('/news', { auth: false });
+    list = Array.isArray(d.news) ? d.news : [];
+  } catch {
+    return; // Lỗi mạng — giữ tin mặc định, không phiền người xem.
+  }
+  if (!list.length) return;
+
+  // Xoay vòng 3 màu nền header thẻ tin — giống phong cách 3 tin mặc định.
+  const grads = ['from-flag-600 to-flag-800', 'from-gold-500 to-flag-500', 'from-flag-800 to-slate-900'];
+  grid.innerHTML = list
+    .map(
+      (n, i) => `
+      <article class="group bg-[#FAF7F2] rounded-2xl border border-slate-100 overflow-hidden hover:shadow-soft transition">
+        <div class="h-36 bg-gradient-to-br ${grads[i % grads.length]} star-pattern flex items-center justify-center">
+          <span class="text-5xl opacity-90">${esc(n.emoji || '📰')}</span>
+        </div>
+        <div class="p-5">
+          <div class="flex items-center gap-2 text-[11px] uppercase tracking-wider">
+            <span class="bg-flag-50 text-flag-700 font-bold px-2 py-0.5 rounded">${esc(n.category || 'Tin tức')}</span>
+            <span class="text-slate-400">${fmtDate(n.createdAt)}</span>
+            ${n.pinned ? '<span class="text-gold-600" title="Tin được ghim lên đầu">★</span>' : ''}
+          </div>
+          <h3 class="font-bold text-slate-900 mt-2.5 leading-snug group-hover:text-flag-700 transition">${esc(n.title)}</h3>
+          <p class="text-sm text-slate-600 mt-2 leading-relaxed">${esc(n.excerpt || '')}</p>
+        </div>
+      </article>`
+    )
+    .join('');
+})();
