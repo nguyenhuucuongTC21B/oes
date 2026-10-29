@@ -112,6 +112,10 @@ async function renderExamList() {
   const user = Auth.user();
   document.getElementById('user-chip').textContent =
     `Thí sinh: ${maskCccd(user.cccd)} · ${user.unit || ''}`;
+  const titleEl = document.getElementById('list-title');
+  const subEl = document.getElementById('list-sub');
+  if (titleEl) titleEl.textContent = 'Danh sách đề thi — các hạng mục';
+  if (subEl) subEl.textContent = 'Chọn một hạng mục để bắt đầu lượt thi. Thời gian làm bài được giám sát bởi máy chủ.';
   const grid = document.getElementById('exam-grid');
   try {
     const { exams } = await api('/exams');
@@ -126,14 +130,10 @@ async function renderExamList() {
       return;
     }
     grid.innerHTML = exams.map((e) => `
-      <article class="bg-white rounded-2xl border shadow-sm p-6 flex flex-col hover:shadow-soft transition ${e.isRandom ? 'border-amber-300 ring-1 ring-amber-200' : 'border-slate-100'}" data-exam-card="${esc(e.id)}">
-        <div class="flex items-center gap-2 flex-wrap">
-          <span class="bg-flag-50 text-flag-700 text-[11px] font-bold uppercase tracking-wider px-2 py-1 rounded">${esc(e.category)}</span>
-          ${e.isRandom ? '<span class="bg-amber-100 text-amber-800 text-[11px] font-bold uppercase tracking-wider px-2 py-1 rounded">Đề riêng mỗi thí sinh</span>' : ''}
-        </div>
+      <article class="bg-white rounded-2xl border border-slate-100 shadow-sm p-6 flex flex-col hover:shadow-soft transition" data-exam-card="${esc(e.id)}">
+        <span class="self-start bg-flag-50 text-flag-700 text-[11px] font-bold uppercase tracking-wider px-2 py-1 rounded">${esc(e.category)}</span>
         <h2 class="font-serif font-bold text-lg text-slate-900 mt-3 leading-snug">${esc(e.title)}</h2>
         <p class="text-sm text-slate-500 mt-2 leading-relaxed flex-1">${esc(e.description || 'Đề thi trắc nghiệm kiến thức pháp luật.')}</p>
-        ${e.isRandom ? '<p class="mt-2 text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">Hệ thống tự trộn 30 câu riêng cho bạn từ ngân hàng 150 câu — mỗi thí sinh một bộ đề khác nhau, chỉ được thi một lần.</p>' : ''}
         <div class="mt-4 flex items-center gap-4 text-xs text-slate-400">
           <span>📝 ${e.questionCount} câu</span>
           <span>⏱ ${e.durationMinutes} phút</span>
@@ -176,6 +176,51 @@ function startWindowTicker() {
 }
 state.examMeta = null; // danh sách đề gốc cho ticker
 
+/* ================== MÀN HÌNH "ĐỀ CỦA BẠN" (đề ngẫu nhiên — R9) ================== */
+/**
+ * Thí sinh KHÔNG cần chọn đề nữa: vào khu vực thi là thấy thẻ "Đề thi ngẫu
+ * nhiên 30 câu / 20 phút". Bấm vào thi → server trộn đề riêng và ký bộ đề
+ * vào attempt token. Quản trị vẫn xem được danh sách đề gốc qua ?list=1.
+ */
+function hasOngoingRandomAttempt() {
+  try {
+    return !!localStorage.getItem(`quiz_attempt_${Auth.user().cccd}_random30`);
+  } catch { return false; }
+}
+
+function renderRandomIntro() {
+  showView('view-list');
+  const user = Auth.user();
+  document.getElementById('user-chip').textContent =
+    `Thí sinh: ${maskCccd(user.cccd)} · ${user.unit || ''}`;
+  const titleEl = document.getElementById('list-title');
+  const subEl = document.getElementById('list-sub');
+  if (titleEl) titleEl.textContent = 'Bài thi trực tuyến của bạn';
+  if (subEl) subEl.textContent = 'Mỗi thí sinh nhận MỘT đề riêng 30 câu — vào lại bất cứ lúc nào vẫn là đúng bộ đề của bạn.';
+
+  const resume = hasOngoingRandomAttempt();
+  const grid = document.getElementById('exam-grid');
+  grid.innerHTML = `
+    <article class="col-span-full max-w-2xl mx-auto w-full bg-white rounded-3xl border border-slate-100 shadow-soft p-8 sm:p-10 text-center">
+      <span class="inline-block bg-flag-50 text-flag-700 text-[11px] font-bold uppercase tracking-wider px-3 py-1.5 rounded-full">Đề riêng theo thí sinh · Luật An ninh mạng 2026</span>
+      <h2 class="font-serif text-2xl sm:text-3xl font-bold text-slate-900 mt-4">Đề thi ngẫu nhiên 30 câu — 20 phút</h2>
+      <div class="mt-4 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-sm text-slate-500">
+        <span>📝 30 câu / lượt</span>
+        <span>⏱ 20 phút</span>
+        <span>🎯 4 đáp án / câu</span>
+        <span>⭐ mỗi câu 2 điểm</span>
+      </div>
+      <p class="text-sm text-slate-500 mt-4 leading-relaxed">Hệ thống trộn đề riêng 30 câu từ <b>150 câu của Bộ đề số 6 — Luật An ninh mạng và các Nghị định hướng dẫn năm 2026</b>. Bộ đề gắn với tài khoản của bạn: thoát ra và vào lại vẫn nhận ĐÚNG bộ đề cũ, đồng hồ 20 phút do máy chủ giám sát. Hết giờ hệ thống tự động nộp bài theo các câu đã trả lời.</p>
+      <div class="mt-4 grid grid-cols-3 gap-2 text-xs">
+        <div class="rounded-xl border border-flag-100 bg-flag-50 py-2.5 font-bold text-flag-700">Thang 10<br /><span class="text-[10px] font-medium text-flag-600/70">xếp hạng chính</span></div>
+        <div class="rounded-xl border border-slate-200 bg-slate-50 py-2.5 font-bold text-slate-600">Thang 100<br /><span class="text-[10px] font-medium text-slate-400">% câu đúng</span></div>
+        <div class="rounded-xl border border-gold-400/60 bg-gold-400/10 py-2.5 font-bold text-gold-600">Thang 60<br /><span class="text-[10px] font-medium text-gold-600/70">30 câu × 2 điểm</span></div>
+      </div>
+      <button onclick="startExam('random30')" class="mt-6 w-full sm:w-auto bg-flag-600 hover:bg-flag-700 text-white font-extrabold text-lg px-10 py-4 rounded-2xl shadow transition">${resume ? 'Tiếp tục lượt thi đang làm' : 'Vào thi ngay'}</button>
+      ${user.role === 'admin' ? '<p class="mt-5 text-xs"><a href="/quiz.html?list=1" class="text-flag-700 underline font-semibold">Quản trị: xem danh sách đề gốc</a></p>' : ''}
+    </article>`;
+}
+
 /* ============================ VÀO THI ============================ */
 async function startExam(examId) {
   try {
@@ -186,14 +231,23 @@ async function startExam(examId) {
       method: 'POST',
       body: savedToken ? { attemptToken: savedToken } : {},
     });
-    const { exam } = await api(`/exams/${examId}`);
+    // Đề ngẫu nhiên (random30): đề được trả ngay trong phản hồi start; đề
+    // thường thì vẫn tải qua GET /exams/:id như cũ.
+    const exam = start.exam || (await api(`/exams/${examId}`)).exam;
 
     state.exam = exam;
     state.attemptToken = start.attemptToken || savedToken;
     if (start.attemptToken) saveAttemptToken(start.attemptToken);
     state.totalSeconds = start.durationMinutes * 60;
     state.remaining = start.remainingSeconds;
-    state.answers = loadAnswersLocal();
+    // Giữ lại câu trả lời khớp với bộ đề hiện tại (lượt mới khác lượt cũ →
+    // tự loại đáp án "ma" của lượt trước, tránh tick sẵn câu không thuộc đề).
+    const savedAnswers = loadAnswersLocal();
+    state.answers = Object.fromEntries(
+      Object.entries(savedAnswers).filter(([qid]) =>
+        state.exam.questions.some((q) => q.id === qid))
+    );
+    saveAnswersLocal();
     state.current = 0;
 
     // Về lại danh sách nếu hết giờ ngay khi vào.
@@ -210,9 +264,9 @@ async function startExam(examId) {
     showView('view-quiz');
   } catch (err) {
     toast(err.message, 'error');
-    // Bị máy chủ chặn vì giờ thi quy định (423) hoặc đã hoàn thành bài thi rồi
-    // (403 — đề chính thức chỉ thi 1 lần) → nạp lại danh sách để nút chuyển trạng thái.
-    if (err.status === 423 || err.status === 403) {
+    // Bị máy chủ chặn vì giờ thi quy định (423) → nạp lại danh sách để nút
+    // "Vào thi" chuyển sang trạng thái khóa đúng lúc.
+    if (err.status === 423) {
       state.examId = null;
       renderExamList();
     }
@@ -331,6 +385,11 @@ async function doSubmit() {
   setBusyUI(true);
   const payload = {
     answers: Object.entries(state.answers).map(([qid, choice]) => ({ qid, choice })),
+    // Đề ngẫu nhiên: gửi kèm danh sách câu hỏi của lượt làm bài — server dùng
+    // khi mất attempt token (fallback); có token thì server ưu tiên token.
+    qids: state.exam && Array.isArray(state.exam.questions)
+      ? state.exam.questions.map((q) => q.id)
+      : undefined,
     durationSeconds: state.totalSeconds - Math.max(state.remaining, 0),
     attemptToken: loadAttemptToken() || state.attemptToken || '',
   };
@@ -348,47 +407,11 @@ async function doSubmit() {
   }
 }
 
-/**
- * R9: GIÃN NỘP BÀI TỰ ĐỘNG — khi hàng trăm thí sinh cùng hết giờ (ví dụ 20 phút),
- * nếu tất cả nộp đúng giây thứ 0 thì các lần ghi dữ liệu bị dồn về một thời điểm.
- * Mỗi thí sinh được cấp 1 độ trễ 0–9 giây TẤT ĐỊNH theo băm CCCD (người khác nhau
- * → độ trễ khác nhau) rồi mới tự nộp. Máy chủ vẫn tính đúng thời lượng làm bài,
- * không trừ điểm vì chậm vài giây giãn nộp.
- */
-function cccdJitterMs() {
-  const s = String((Auth.user() && Auth.user().cccd) || '');
-  let h = 2166136261;
-  for (let i = 0; i < s.length; i++) {
-    h ^= s.charCodeAt(i);
-    h = Math.imul(h, 16777619) >>> 0;
-  }
-  return (h % 10) * 1000;
-}
-
 function autoSubmit() {
   if (state.submitting) return;
-  const delay = cccdJitterMs();
-  if (delay <= 0) {
-    toast('Hết giờ làm bài! Hệ thống tự động nộp bài của bạn.', 'info');
-    doSubmit();
-    return;
-  }
-  // Chặn nộp tay trong lúc chờ giãn nộp; nếu tab bị đóng thì nộp ngay lập tức.
-  state.pendingAutoSubmit = true;
-  toast(`Hết giờ làm bài! Hệ thống sẽ tự nộp bài của bạn sau ${Math.round(delay / 1000)} giây — đừng đóng trang.`, 'info');
-  setTimeout(() => {
-    state.pendingAutoSubmit = false;
-    doSubmit();
-  }, delay);
+  toast('Hết giờ làm bài! Hệ thống tự động nộp bài của bạn.', 'info');
+  doSubmit();
 }
-
-/* R9: nếu tab bị đóng/chuyển trang trong lúc chờ giãn nộp → nộp ngay lập tức. */
-window.addEventListener('pagehide', () => {
-  if (state.pendingAutoSubmit) {
-    state.pendingAutoSubmit = false;
-    doSubmit();
-  }
-});
 
 function setBusyUI(busy) {
   for (const id of ['btn-submit-top', 'btn-submit-side', 'btn-confirm-submit']) {
@@ -400,12 +423,21 @@ function setBusyUI(busy) {
 
 function renderResult(r) {
   showView('view-result');
-  animateScore(r.score);
+  // R10 — 3 THANG ĐIỂM: server trả score/score100/score60; phòng hờ tự tính lại.
+  const s = computeScales(r.correct, r.total, r);
+  animateScore(s.score10);
   document.getElementById('r-correct').textContent = `${r.correct} câu`;
   document.getElementById('r-total').textContent = `${r.total} câu`;
   document.getElementById('r-duration').textContent = fmtDuration(r.durationSeconds);
+  document.getElementById('r-s10').textContent = fmtScore(s.score10);
+  document.getElementById('r-s100').textContent = fmtScore(s.score100);
+  document.getElementById('r-s60').textContent = fmtScore(s.score60);
+  // Ghi chú thang 60 chỉ áp đúng khi bộ đề 30 câu (mỗi câu 2 điểm).
+  const note = document.getElementById('r-scale-note');
+  if (Number(r.total) === 30) note.classList.remove('hidden');
+  else note.classList.add('hidden');
   const ring = document.getElementById('score-ring');
-  setTimeout(() => { ring.style.setProperty('--pct', Math.round((r.score / 10) * 100)); }, 120);
+  setTimeout(() => { ring.style.setProperty('--pct', Math.round(s.score100)); }, 120);
 }
 
 function animateScore(target) {
@@ -441,6 +473,8 @@ window.addEventListener('beforeunload', (e) => {
     ${user.role === 'admin' ? `<a href="/admin.html" class="text-flag-700 bg-flag-50 hover:bg-flag-100 font-semibold px-3 py-2 rounded-lg transition">Quản trị</a>` : ''}
     <button onclick="doLogout()" class="text-slate-500 hover:text-red-600 font-semibold px-3 py-2 transition">Đăng xuất</button>`;
 
+  const listParam = new URLSearchParams(location.search).get('list');
   if (state.examId) startExam(state.examId);
-  else renderExamList();
+  else if (listParam === '1') renderExamList(); // Quản trị xem đề gốc
+  else renderRandomIntro(); // Thí sinh: màn hình đề ngẫu nhiên
 })();

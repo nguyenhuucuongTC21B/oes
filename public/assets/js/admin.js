@@ -13,8 +13,7 @@ const currentUser = Auth.user();
 document.getElementById('admin-chip').textContent = `Admin: ${maskCccd(currentUser.cccd)}`;
 
 /* Dữ liệu đệm client-side. */
-const cache = { users: [], exams: [], results: [], siteCfg: null, unitsDefault: [], unitsIsDefault: true };
-let siteCfgBusy = false; // Đang lưu cấu hình giao diện — chặn bấm Lưu lặp.
+const cache = { users: [], exams: [], results: [] };
 let rankByScore = false;
 let editingUserCccd = null;
 let editingResultId = null;
@@ -37,8 +36,8 @@ function switchSection(name) {
   if (name === 'users') renderUsers();
   if (name === 'exams') renderExams();
   if (name === 'results') renderResults();
-  if (name === 'aggregate') renderAggregate();
-  if (name === 'appearance') renderAppearance();
+  if (name === 'teams') renderTeams();
+  if (name === 'site') loadSiteForm();
 }
 for (const btn of document.querySelectorAll('.nav-btn')) {
   btn.addEventListener('click', () => switchSection(btn.dataset.section));
@@ -150,10 +149,8 @@ function openUserModal(cccd) {
   document.getElementById('mu-phone').value = u.phone || '';
   document.getElementById('mu-email').value = u.email || '';
   document.getElementById('mu-position').value = u.position || '';
-  // R10: đơn vị là dropdown theo danh sách Ban Tổ chức (đơn vị cũ ngoài danh sách
-  // vẫn hiển thị để giữ nguyên, không bị ép đổi khi sửa thông tin khác).
+  // R10: đơn vị công tác dạng dropdown 25 mục (giữ giá trị cũ nếu ngoài danh mục).
   document.getElementById('mu-unit').innerHTML = unitOptionsHtml(u.unit || '');
-  document.getElementById('mu-unit').value = u.unit || '';
   document.getElementById('mu-role').value = u.role || 'user';
   document.getElementById('mu-password').value = '';
   document.getElementById('mu-error').classList.add('hidden');
@@ -229,19 +226,7 @@ function renderExams() {
       </div>`;
     return;
   }
-  host.innerHTML = cache.exams.map((e) => e.isRandom ? `
-    <article class="bg-amber-50/60 rounded-2xl border border-amber-300 p-5 flex flex-col">
-      <div class="flex items-start justify-between gap-2">
-        <span class="bg-amber-100 text-amber-800 text-[11px] font-bold uppercase tracking-wider px-2 py-1 rounded">Đề tự động sinh</span>
-        <span class="text-[11px] text-slate-400">${fmtDate(e.createdAt)}</span>
-      </div>
-      <h3 class="font-bold text-slate-900 mt-3 leading-snug">${esc(e.title)}</h3>
-      <p class="text-xs text-slate-500 mt-1.5 leading-relaxed flex-1">Hệ thống tự trộn cho <b>MỖI thí sinh một bộ ${e.questionCount} câu riêng</b> từ Bộ đề số 6 (150 câu), thời gian làm bài ${e.durationMinutes} phút, mỗi thí sinh chỉ thi một lần. Đề này KHÔNG cần tạo/xóa/sửa — cấu hình nằm trong RANDOM_EXAM (api/index.js). Khung giờ thi kế thừa từ đề nguồn (Bộ đề số 6).</p>
-      ${examScheduleChip(e)}
-      <div class="mt-3 flex items-center gap-3 text-xs text-slate-400">
-        <span>📝 ${e.questionCount} câu</span><span>⏱ ${e.durationMinutes} phút</span>
-      </div>
-    </article>` : `
+  host.innerHTML = cache.exams.map((e) => `
     <article class="bg-white rounded-2xl border border-slate-200 p-5 flex flex-col">
       <div class="flex items-start justify-between gap-2">
         <span class="bg-flag-50 text-flag-700 text-[11px] font-bold uppercase tracking-wider px-2 py-1 rounded">${esc(e.category)}</span>
@@ -666,9 +651,11 @@ function renderResults() {
 
   const summary = document.getElementById('result-summary');
   if (list.length) {
-    const avg = Math.round((list.reduce((s, r) => s + (Number(r.score) || 0), 0) / list.length) * 100) / 100;
+    const avg10 = Math.round((list.reduce((s, r) => s + (Number(r.score) || 0), 0) / list.length) * 100) / 100;
+    const avg100 = Math.round((list.reduce((s, r) => s + (Number(r.score100) || 0), 0) / list.length) * 100) / 100;
+    const avg60 = Math.round((list.reduce((s, r) => s + (Number(r.score60) || 0), 0) / list.length) * 100) / 100;
     const max = Math.max(...list.map((r) => Number(r.score) || 0));
-    summary.innerHTML = `Tổng số bài: <b>${list.length}</b> · Điểm trung bình: <b class="text-flag-600">${avg.toFixed(2)}</b> · Điểm cao nhất: <b class="text-emerald-600">${max.toFixed(2)}</b>`;
+    summary.innerHTML = `Tổng số bài: <b>${list.length}</b> · TB 3 thang: <b class="text-flag-600">${avg10.toFixed(2)}</b> / 10 · <b class="text-flag-600">${avg100.toFixed(2)}</b> / 100 · <b class="text-flag-600">${avg60.toFixed(2)}</b> / 60 · Cao nhất: <b class="text-emerald-600">${max.toFixed(2)}</b> / 10`;
   } else {
     summary.textContent = '';
   }
@@ -683,6 +670,8 @@ function renderResults() {
   tbody.innerHTML = list.map((r, i) => {
     const user = cache.users.find((u) => u.cccd === r.cccd);
     const edited = r.editedAt ? `<span title="Đã chỉnh sửa bởi admin" class="ml-1">✎</span>` : '';
+    // R10: 3 thang điểm hiển thị đồng thời.
+    const s = computeScales(r.correct, r.total, r);
     return `
       <tr class="hover:bg-slate-50/70">
         <td class="px-5 py-3.5 text-slate-400 font-bold">${rankByScore ? (i + 1) : i + 1}</td>
@@ -694,7 +683,9 @@ function renderResults() {
           <div class="text-xs text-slate-400">${esc(r.examTitle)}</div>
         </td>
         <td class="px-5 py-3.5">
-          <span class="font-extrabold ${Number(r.score) >= 5 ? 'text-emerald-600' : 'text-red-500'} text-base">${Number(r.score).toFixed(2)}</span>
+          <span class="font-extrabold ${Number(s.score10) >= 5 ? 'text-emerald-600' : 'text-red-500'} text-base">${fmtScore(s.score10)}</span>
+          <span class="text-[11px] text-slate-400">/10</span>
+          <div class="text-[11px] text-slate-500 mt-0.5">Thang 100: <b>${fmtScore(s.score100)}</b> · Thang 60: <b>${fmtScore(s.score60)}</b></div>
           <div class="text-[11px] text-slate-400">${r.correct}/${r.total} câu · ${fmtDuration(r.durationSeconds)}</div>
           ${r.note ? `<div class="text-[11px] text-amber-600 mt-0.5">Ghi chú: ${esc(r.note)}</div>` : ''}
         </td>
@@ -703,7 +694,7 @@ function renderResults() {
           ${r.editedAt ? `<div class="text-amber-600">Sửa: ${fmtDateTime(r.editedAt)}</div>` : ''}
         </td>
         <td class="px-5 py-3.5 text-right whitespace-nowrap">
-          <button onclick="openPrintPhieu('${esc(r.id)}')" title="In phiếu kết quả của thí sinh này" class="text-slate-500 hover:text-flag-700 font-semibold text-xs px-2 py-1.5">In</button>
+          <button onclick="openPaperModal('${esc(r.id)}')" class="text-slate-600 hover:text-flag-700 font-semibold text-xs px-2 py-1.5" title="Xem toàn bộ bài làm (đáp án đúng + lựa chọn của thí sinh)">Bài làm</button>
           <button onclick="openResultModal('${esc(r.id)}')" class="text-flag-600 hover:text-flag-800 font-semibold text-xs px-2 py-1.5">Sửa</button>
           <button onclick="askDeleteResult('${esc(r.id)}')" class="text-red-500 hover:text-red-700 font-semibold text-xs px-2 py-1.5">Xóa</button>
         </td>
@@ -769,477 +760,221 @@ function askDeleteResult(id) {
   });
 }
 
-/* ==================== R9: TỔNG HỢP & XÉT GIẢI TẬP THỂ ====================
- * Nguyên tắc:
- *  - Gom đội theo "Đơn vị công tác" (user.unit) trong dữ liệu đăng ký. Chuẩn hóa
- *    tên đơn vị (trim + gộp khoảng trắng + không phân biệt hoa/thường) để
- *    "VKS Quận 1" và "vks   quận 1" vẫn là một đội.
- *  - Điểm đội = trung bình điểm của Top k thí sinh cao nhất của đơn vị (mặc định
- *    k=3, chỉnh được). Cách này công bằng giữa đơn vị đông/người ít, không bị
- *    "pha" điểm bởi số lượng và khuyến khích chuẩn bị kỹ.
- *  - Đơn vị cần tối thiểu N bài thi (mặc định 3) mới đủ điều kiện xét giải;
- *    đơn vị thiếu người vẫn hiển thị nhưng không xếp hạng.
- *  - Giải hòa đội: điểm cá nhân cao nhất → nhì → tỷ lệ hoàn thành → thời gian TB.
- *  - Giải hòa cá nhân: điểm cao hơn → làm bài nhanh hơn → nộp sớm hơn.
- */
-const ORG_LINE = 'VIỆN KIỂM SÁT NHÂN DÂN TP. ĐÀ NẴNG'; // ← sửa dòng đầu của phiếu in tại đây
-const CONTEST_LINE = 'CUỘC THI TRẮC NGHIỆM PHÁP LUẬT TRỰC TUYẾN NĂM 2026';
+/* ==================== R10: BẢNG ĐIỂM TẬP THỂ ==================== */
+let teamsExamFilter = ''; // '' = tự chọn mặc định (random30 ưu tiên)
 
-function normalizeUnitKey(v) {
-  return String(v || '').trim().replace(/\s+/g, ' ').toLowerCase() || '(chưa xác định)';
-}
-function displayUnit(v) {
-  return (v && String(v).trim()) ? String(v).trim() : 'Chưa xác định đơn vị';
-}
-function agExamKey(r) {
-  return r.examId || r.examTitle || r.category || '';
-}
-function agSettings() {
-  return {
-    examFilter: document.getElementById('ag-exam').value,
-    mode: document.getElementById('ag-mode').value, // 'latest' | 'best'
-    topK: parseInt(document.getElementById('ag-topk').value, 10) || 3,
-    minMembers: Math.max(1, parseInt(document.getElementById('ag-min').value, 10) || 3),
-  };
-}
-function fillAgExamFilter() {
-  const sel = document.getElementById('ag-exam');
-  const current = sel.value;
-  const keys = new Map(); // examKey → nhãn hiển thị
-  for (const r of cache.results) {
-    const k = agExamKey(r);
-    if (!keys.has(k)) keys.set(k, r.examTitle || r.category || k);
-  }
-  // Đề ngẫu nhiên chính thức luôn có mặt trong bộ lọc (kể cả khi chưa có bài nộp).
-  const randomExam = cache.exams.find((e) => e.isRandom);
-  const opts = [];
-  if (randomExam && !keys.has(randomExam.id)) opts.push([randomExam.id, randomExam.title]);
-  for (const [k, label] of keys) opts.push([k, label]);
-  sel.innerHTML = '<option value="">Tất cả bài thi</option>' +
-    opts.map(([k, label]) => `<option value="${esc(k)}">${esc(label)}</option>`).join('');
-  if (current === '' || [...keys.keys()].includes(current)) sel.value = current;
-}
+async function renderTeams() {
+  const tbody = document.getElementById('teams-tbody');
+  const summary = document.getElementById('team-summary');
+  const sel = document.getElementById('team-exam-filter');
+  try {
+    const q = teamsExamFilter ? `?examId=${encodeURIComponent(teamsExamFilter)}` : '';
+    const data = await api(`/admin/team-results${q}`);
+    // Bộ lọc hạng mục (lần đầu / khi danh sách đổi).
+    const current = sel.value;
+    const opts = ['<option value="">— Tất cả hạng mục (gộp mọi bài thi) —</option>']
+      .concat(data.exams.map((e) => `<option value="${esc(e.id)}">${esc(e.title || e.id)}</option>`));
+    sel.innerHTML = opts.join('');
+    if ([...sel.options].some((o) => o.value === current)) sel.value = current;
+    else sel.value = data.examId === 'ALL' ? '' : data.examId;
 
-/** Danh sách cá nhân: 1 dòng/thí sinh theo chế độ tính (mới nhất hoặc điểm cao nhất), đã xếp hạng. */
-function computeIndividuals(settings) {
-  const byCccd = new Map();
-  for (const r of cache.results) {
-    if (settings.examFilter && agExamKey(r) !== settings.examFilter) continue;
-    if (!byCccd.has(r.cccd)) byCccd.set(r.cccd, []);
-    byCccd.get(r.cccd).push(r);
-  }
-  const list = [];
-  for (const [cccd, attempts] of byCccd) {
-    attempts.sort((a, b) => String(b.submittedAt || '').localeCompare(String(a.submittedAt || '')));
-    let chosen = attempts[0]; // mới nhất
-    if (settings.mode === 'best') {
-      for (const a of attempts) if ((Number(a.score) || 0) > (Number(chosen.score) || 0)) chosen = a;
+    // Dòng tổng kết.
+    const t = data.totals;
+    summary.innerHTML =
+      `Số tập thể xét giải: <b>${t.teams}</b> · Đăng ký: <b>${t.registered}</b> · Đã dự thi: <b>${t.participants}</b> · ` +
+      `Bài thi: <b>${t.attempts}</b> · Điểm TB toàn hội đồng 3 thang: ` +
+      `<b class="text-flag-600">${fmtScore(t.avg10)}</b>/10 · <b class="text-flag-600">${fmtScore(t.avg100)}</b>/100 · <b class="text-flag-600">${fmtScore(t.avg60)}</b>/60`;
+
+    if (data.teams.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="10" class="text-center text-slate-400 py-10">Chưa có dữ liệu.</td></tr>';
+      return;
     }
-    list.push({
-      cccd,
-      result: chosen,
-      attempts: attempts.length,
-      user: cache.users.find((u) => u.cccd === cccd) || null,
-    });
-  }
-  list.sort((a, b) => {
-    const s = (Number(b.result.score) || 0) - (Number(a.result.score) || 0);
-    if (s !== 0) return s;
-    const d = (Number(a.result.durationSeconds) || 0) - (Number(b.result.durationSeconds) || 0);
-    if (d !== 0) return d;
-    return String(a.result.submittedAt || '').localeCompare(String(b.result.submittedAt || ''));
-  });
-  list.forEach((x, i) => { x.rank = i + 1; });
-  return list;
-}
-
-/** Xếp hạng đội theo đơn vị + công thức điểm đội Top-k. */
-function computeTeams(individuals, settings) {
-  const teams = new Map();
-  const ensureTeam = (key, unit) => {
-    if (!teams.has(key)) teams.set(key, { key, unit, members: [], registered: 0 });
-    return teams.get(key);
-  };
-  // Đếm số đăng ký theo đơn vị (mọi tài khoản, kể cả người chưa thi).
-  for (const u of cache.users) {
-    ensureTeam(normalizeUnitKey(u.unit), displayUnit(u.unit)).registered += 1;
-  }
-  for (const it of individuals) {
-    const key = normalizeUnitKey(it.user && it.user.unit);
-    ensureTeam(key, displayUnit(it.user && it.user.unit)).members.push(it);
-  }
-  const list = [...teams.values()];
-  for (const t of list) {
-    t.members.sort((a, b) => (Number(b.result.score) || 0) - (Number(a.result.score) || 0));
-    const k = Math.max(1, Math.min(settings.topK, t.members.length));
-    const top = t.members.slice(0, k);
-    t.topCount = k;
-    t.teamScore = top.length
-      ? Math.round(top.reduce((s, m) => s + (Number(m.result.score) || 0), 0) / k * 100) / 100
-      : 0;
-    t.topScores = top.map((m) => Number(m.result.score) || 0);
-    t.avgAll = t.members.length
-      ? Math.round(t.members.reduce((s, m) => s + (Number(m.result.score) || 0), 0) / t.members.length * 100) / 100
-      : 0;
-    t.avgDuration = t.members.length
-      ? Math.round(t.members.reduce((s, m) => s + (Number(m.result.durationSeconds) || 0), 0) / t.members.length)
-      : 0;
-    t.qualified = t.members.length >= settings.minMembers;
-  }
-  // Đội đủ điều kiện đứng trước; trong mỗi nhóm: điểm đội desc → thành phần điểm
-  // cao nhất từng vị trí desc → tỷ lệ hoàn thành desc → thời gian TB asc.
-  list.sort((a, b) => {
-    if (a.qualified !== b.qualified) return a.qualified ? -1 : 1;
-    const s = b.teamScore - a.teamScore;
-    if (s !== 0) return s;
-    const n = Math.max(a.topScores.length, b.topScores.length);
-    for (let i = 0; i < n; i++) {
-      const d = (b.topScores[i] || 0) - (a.topScores[i] || 0);
-      if (d !== 0) return d;
-    }
-    const ra = a.members.length / Math.max(a.registered, 1);
-    const rb = b.members.length / Math.max(b.registered, 1);
-    if (rb !== ra) return rb - ra;
-    return a.avgDuration - b.avgDuration;
-  });
-  let rank = 0;
-  for (const t of list) {
-    if (t.qualified) { rank += 1; t.rank = rank; } else { t.rank = null; }
-  }
-  return list;
-}
-
-let lastIndividuals = []; // phục vụ tra hạng cá nhân khi in phiếu
-
-function renderAggregate() {
-  fillAgExamFilter();
-  const settings = agSettings();
-  lastIndividuals = computeIndividuals(settings);
-  const teams = computeTeams(lastIndividuals, settings);
-
-  /* ---- Bảng đội ---- */
-  const tBody = document.getElementById('teams-tbody');
-  if (teams.length === 0) {
-    tBody.innerHTML = '<tr><td colspan="7" class="text-center text-slate-400 py-10">Chưa có dữ liệu.</td></tr>';
-  } else {
-    tBody.innerHTML = teams.map((t) => `
-      <tr class="hover:bg-slate-50/70 ${t.rank === 1 ? 'bg-amber-50/60' : ''}">
-        <td class="px-4 py-3.5 font-extrabold text-slate-700">${t.rank ? '#' + t.rank : '—'}</td>
-        <td class="px-4 py-3.5 font-semibold text-slate-800">${esc(t.unit)}
-          ${t.qualified ? '' : `<div class="text-[11px] text-amber-600">Chưa đủ điều kiện xét giải (cần tối thiểu ${settings.minMembers} bài thi)</div>`}
-        </td>
-        <td class="px-3 py-3.5 text-center text-slate-600">${t.registered}</td>
-        <td class="px-3 py-3.5 text-center text-slate-600">${t.members.length}</td>
-        <td class="px-4 py-3.5">
-          <span class="font-extrabold text-flag-700 text-base">${t.members.length ? t.teamScore.toFixed(2) : '—'}</span>
-          <div class="text-[11px] text-slate-400">TB Top ${t.topCount}</div>
-        </td>
-        <td class="px-4 py-3.5 text-xs text-slate-500">${t.topScores.map((s, i) => `<span class="inline-block bg-slate-100 rounded px-1.5 py-0.5 mr-1 mb-0.5">#${i + 1}: <b>${s.toFixed(2)}</b></span>`).join('') || '—'}</td>
-        <td class="px-3 py-3.5 text-center text-slate-600">${t.members.length ? t.avgAll.toFixed(2) : '—'}</td>
-      </tr>`).join('');
-  }
-
-  /* ---- Bảng cá nhân ---- */
-  const pBody = document.getElementById('ag-tbody');
-  if (lastIndividuals.length === 0) {
-    pBody.innerHTML = '<tr><td colspan="6" class="text-center text-slate-400 py-10">Chưa có dữ liệu — chưa có bài thi nào thuộc phạm vi đã chọn.</td></tr>';
-  } else {
-    pBody.innerHTML = lastIndividuals.map((it) => {
-      const r = it.result;
-      const u = it.user;
+    tbody.innerHTML = data.teams.map((tm) => {
+      const medal = tm.rank === 1 ? '🥇' : tm.rank === 2 ? '🥈' : tm.rank === 3 ? '🥉' : '';
+      const top = (tm.topMembers || [])
+        .map((m) => `<span class="inline-block bg-slate-100 rounded-lg px-2 py-0.5 text-[11px] mr-1 mb-0.5" title="${esc(m.cccd)}">${esc(maskCccd(m.cccd))}: <b>${fmtScore(m.score10)}</b></span>`)
+        .join('') || '<span class="text-slate-300 text-xs">—</span>';
       return `
-      <tr class="hover:bg-slate-50/70">
-        <td class="px-4 py-3.5 font-extrabold ${it.rank <= 3 ? 'text-flag-700' : 'text-slate-500'}">${it.rank}</td>
-        <td class="px-4 py-3.5 font-mono font-semibold text-slate-800">${esc(r.cccd)}
-          <div class="text-[11px] text-slate-400 font-sans">${esc(u ? [u.position, u.unit].filter(Boolean).join(' · ') : 'Tài khoản đã xóa')}</div>
-          ${it.attempts > 1 ? `<div class="text-[11px] text-amber-600 font-sans">Đã thi ${it.attempts} lần — tính theo ${settings.mode === 'best' ? 'điểm cao nhất' : 'bài mới nhất'}</div>` : ''}
-        </td>
-        <td class="px-4 py-3.5 text-slate-600">${esc(displayUnit(u && u.unit))}</td>
-        <td class="px-4 py-3.5">
-          <span class="font-extrabold ${Number(r.score) >= 5 ? 'text-emerald-600' : 'text-red-500'} text-base">${Number(r.score).toFixed(2)}</span>
-          <div class="text-[11px] text-slate-400">${r.correct}/${r.total} câu</div>
-          ${r.note ? `<div class="text-[11px] text-amber-600 mt-0.5">Ghi chú: ${esc(r.note)}</div>` : ''}
-        </td>
-        <td class="px-4 py-3.5 text-xs text-slate-500">
-          <div>${fmtDuration(r.durationSeconds)}</div>
-          <div>Nộp: ${fmtDateTime(r.submittedAt)}</div>
-        </td>
-        <td class="px-4 py-3.5 text-right whitespace-nowrap">
-          <button onclick="openPrintPhieu('${esc(r.id)}')" class="text-flag-600 hover:text-flag-800 font-semibold text-xs px-2 py-1.5">🖨 In phiếu</button>
-        </td>
-      </tr>`;
+        <tr class="hover:bg-slate-50/70 ${tm.excluded ? 'opacity-60' : ''}">
+          <td class="px-4 py-3.5 font-extrabold text-slate-700">${tm.excluded ? '—' : `${esc(String(tm.rank))} ${medal}`}</td>
+          <td class="px-4 py-3.5">
+            <span class="font-bold text-slate-800">${esc(tm.unit)}</span>
+            ${tm.excluded ? '<span class="ml-1.5 bg-slate-200 text-slate-500 text-[10px] font-bold px-2 py-0.5 rounded-full">Không xét giải</span>' : ''}
+          </td>
+          <td class="px-3 py-3.5 text-center text-slate-600">${tm.registered}</td>
+          <td class="px-3 py-3.5 text-center text-slate-600">${tm.participants}</td>
+          <td class="px-3 py-3.5 text-center ${tm.participation >= 80 ? 'text-emerald-600 font-bold' : tm.participation >= 50 ? 'text-slate-600' : 'text-amber-600'}">${tm.participation}%</td>
+          <td class="px-3 py-3.5 text-center font-extrabold text-flag-600 text-base">${fmtScore(tm.avg10)}</td>
+          <td class="px-3 py-3.5 text-center font-bold text-slate-700">${fmtScore(tm.avg100)}</td>
+          <td class="px-3 py-3.5 text-center font-bold text-gold-600">${fmtScore(tm.avg60)}</td>
+          <td class="px-3 py-3.5 text-center text-slate-600">${tm.participants ? fmtScore(tm.best10) : '—'}</td>
+          <td class="px-4 py-3.5">${top}</td>
+        </tr>`;
     }).join('');
-  }
-}
-document.getElementById('ag-exam').addEventListener('change', renderAggregate);
-document.getElementById('ag-mode').addEventListener('change', renderAggregate);
-document.getElementById('ag-topk').addEventListener('change', renderAggregate);
-document.getElementById('ag-min').addEventListener('input', renderAggregate);
-
-/* ---- Xuất CSV (dấu ; + BOM để mở thẳng bằng Excel tiếng Việt) ---- */
-function csvCell(v) {
-  const s = String(v === undefined || v === null ? '' : v);
-  return /[";\n]/.test(s) ? '"' + s.replaceAll('"', '""') + '"' : s;
-}
-function downloadCsv(filename, rows) {
-  const text = '\uFEFF' + rows.map((r) => r.map(csvCell).join(';')).join('\r\n');
-  const blob = new Blob([text], { type: 'text/csv;charset=utf-8' });
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 400);
-}
-function exportIndividualsCsv() {
-  const settings = agSettings();
-  const individuals = computeIndividuals(settings);
-  const rows = [
-    ['Hạng', 'CCCD', 'Chức vụ', 'Đơn vị công tác', 'Bài thi', 'Điểm', 'Số câu đúng', 'Tổng câu', 'Thời gian làm bài (giây)', 'Thời điểm nộp', 'Số lần thi', 'Ghi chú'],
-  ];
-  for (const it of individuals) {
-    const r = it.result;
-    rows.push([
-      it.rank,
-      r.cccd,
-      it.user ? (it.user.position || '') : '',
-      displayUnit(it.user && it.user.unit),
-      r.examTitle || r.category || '',
-      Number(r.score).toFixed(2),
-      r.correct,
-      r.total,
-      r.durationSeconds,
-      fmtDateTime(r.submittedAt),
-      it.attempts,
-      r.note || '',
-    ]);
-  }
-  downloadCsv(`bang-diem-ca-nhan-${Date.now()}.csv`, rows);
-}
-function exportTeamsCsv() {
-  const settings = agSettings();
-  const teams = computeTeams(computeIndividuals(settings), settings);
-  const rows = [
-    ['Hạng', 'Đơn vị công tác', 'Số đăng ký', 'Số đã thi', `Điểm đội (TB Top ${settings.topK})`, 'Thành phần điểm (Top)', 'Điểm TB tất cả', 'Điều kiện xét giải'],
-  ];
-  for (const t of teams) {
-    rows.push([
-      t.rank || '',
-      t.unit,
-      t.registered,
-      t.members.length,
-      t.members.length ? t.teamScore.toFixed(2) : '',
-      t.topScores.map((s) => s.toFixed(2)).join(', '),
-      t.members.length ? t.avgAll.toFixed(2) : '',
-      t.qualified ? 'Đạt' : `Chưa đạt (cần tối thiểu ${settings.minMembers})`,
-    ]);
-  }
-  downloadCsv(`bang-xep-hang-doi-${Date.now()}.csv`, rows);
-}
-
-/* ---- In phiếu kết quả từng thí sinh ---- */
-function optionLetter(i) {
-  return Number.isInteger(i) ? String.fromCharCode(65 + i) : '—';
-}
-function individualRankOf(resultId) {
-  const it = lastIndividuals.find((x) => x.result.id === resultId);
-  return it ? it.rank : null;
-}
-async function openPrintPhieu(resultId) {
-  try {
-    const data = await api(`/admin/results/${resultId}/detail`);
-    const html = buildPhieuHtml(data);
-    document.getElementById('print-preview').innerHTML = html;
-    document.getElementById('print-area').innerHTML = html;
-    openModal('modal-print');
   } catch (err) {
-    toast(err.message, 'error');
+    tbody.innerHTML = `<tr><td colspan="10" class="text-center text-red-500 py-10">${esc(err.message)}</td></tr>`;
   }
 }
-function buildPhieuHtml(data) {
-  const r = data.result;
-  const user = cache.users.find((u) => u.cccd === r.cccd) || {};
-  const rank = individualRankOf(r.id);
-  const rows = data.questions.map((q, idx) => {
-    const has = Object.prototype.hasOwnProperty.call(data.answers, q.id);
-    const choice = has ? data.answers[q.id] : null;
-    const ok = Number.isInteger(choice) && choice === q.correctIndex;
-    const chosen = Number.isInteger(choice) ? `${optionLetter(choice)}. ${q.options[choice] || ''}` : '(không trả lời)';
-    const right = `${optionLetter(q.correctIndex)}. ${q.options[q.correctIndex] || ''}`;
-    return `
-      <tr>
-        <td style="text-align:center">${idx + 1}</td>
-        <td>${esc(q.text)}</td>
-        <td>${esc(chosen)}</td>
-        <td>${esc(right)}</td>
-        <td style="text-align:center;font-weight:700;color:${ok ? '#047857' : '#b91c1c'}">${ok ? 'Đúng' : 'Sai'}</td>
-      </tr>`;
-  }).join('');
-  return `
-    <div style="text-align:center">
-      <div style="font-weight:700;letter-spacing:.4px">${esc(ORG_LINE)}</div>
-      <div style="font-size:11px">---------------- o0o ----------------</div>
-      <h2 style="font-size:18px;font-weight:800;margin:8px 0 2px">PHIẾU KẾT QUẢ THI TRẮC NGHIỆM</h2>
-      <div style="font-size:12px">${esc(CONTEST_LINE)}</div>
-      <div style="font-size:12px;margin-top:3px">Bài thi: <b>${esc(r.examTitle)}</b></div>
-    </div>
-    <table class="pv-table" style="margin-top:10px">
-      <tr><th style="width:20%">Số CCCD</th><td style="width:30%">${esc(r.cccd)}</td><th style="width:20%">Hạng cá nhân</th><td>${rank ? '#' + rank : '—'}</td></tr>
-      <tr><th>Chức vụ</th><td>${esc(user.position || '—')}</td><th>Đơn vị công tác</th><td>${esc(displayUnit(user.unit))}</td></tr>
-      <tr><th>Email</th><td>${esc(user.email || '—')}</td><th>Số lần thi</th><td>${r.attempts}</td></tr>
-      <tr><th><b>ĐIỂM THI</b></th><td style="font-size:16px;font-weight:800;color:#b00d28">${Number(r.score).toFixed(2)} / 10</td><th>Số câu đúng</th><td><b>${r.correct}</b> / ${r.total}</td></tr>
-      <tr><th>Thời gian làm bài</th><td>${fmtDuration(r.durationSeconds)}</td><th>Thời điểm nộp bài</th><td>${fmtDateTime(r.submittedAt)}</td></tr>
-    </table>
-    ${r.note ? `<p style="margin-top:8px"><b>Ghi chú của Ban Tổ chức:</b> ${esc(r.note)}</p>` : ''}
-    <p style="margin-top:12px;font-weight:700">CHI TIẾT BÀI LÀM (${data.questions.length} câu):</p>
-    <table class="pv-table">
-      <thead>
-        <tr><th style="width:6%">Câu</th><th style="width:42%">Nội dung câu hỏi</th><th style="width:19%">Đáp án đã chọn</th><th style="width:22%">Đáp án đúng</th><th style="width:11%">Kết quả</th></tr>
-      </thead>
-      <tbody>${rows}</tbody>
-    </table>
-    <table style="width:100%;margin-top:22px;font-size:12px">
-      <tr>
-        <td style="text-align:center;width:50%">Người lập bảng<br><br><br>_____________________</td>
-        <td style="text-align:center;width:50%">Đại diện Ban Tổ chức<br><br><br>_____________________</td>
-      </tr>
-    </table>
-    <p style="margin-top:12px;font-size:10px;color:#555">Phiếu in từ hệ thống thi trực tuyến OES lúc ${new Date().toLocaleString('vi-VN')}${r.isRandom ? ' · Bộ đề riêng 30 câu được trộn từ ngân hàng 150 câu (Bộ đề số 6 - Luật An ninh mạng 2026)' : ''}.</p>`;
+
+document.getElementById('team-exam-filter').addEventListener('change', (e) => {
+  teamsExamFilter = e.target.value;
+  renderTeams();
+});
+
+function printTeamBoard() {
+  document.body.classList.add('print-teams');
+  setTimeout(() => window.print(), 60);
 }
+window.addEventListener('afterprint', () => document.body.classList.remove('print-teams'));
 
-/* ==================== R10: GIAO DIỆN & THỜI GIAN (site-config) ====================
- * Lưu tại usersVercel.json (bản ghi "__siteConfig__") — không tạo file mới trên Drive.
- * Trang chủ + trang đăng ký đọc công khai qua GET /api/site-config. */
-
-function unitOptionsHtml(selected) {
-  const list = Array.isArray(cache.siteCfg && cache.siteCfg.units) && cache.siteCfg.units.length
-    ? cache.siteCfg.units
-    : (cache.unitsDefault.length ? cache.unitsDefault : []);
-  let html = '';
-  if (selected && !list.includes(selected)) {
-    // Đơn vị cũ ngoài danh sách (tài khoản đăng ký trước R10) — giữ nguyên, không ép đổi.
-    html += `<option value="${esc(selected)}">※ Giữ nguyên: ${esc(selected)}</option>`;
-  }
-  html += '<option value="">— Chọn đơn vị —</option>' +
-    list.map((u) => `<option value="${esc(u)}"${u === selected ? ' selected' : ''}>${esc(u)}</option>`).join('');
-  return html;
-}
-
-async function loadSiteConfigAdmin() {
+/* ==================== R10: PHIẾU BÀI LÀM HOÀN CHỈNH ==================== */
+/** Xem & in toàn bộ bài làm của một thí sinh (đáp án đúng + lựa chọn thực tế). */
+async function openPaperModal(resultId) {
+  openModal('modal-paper');
+  const body = document.getElementById('paper-body');
+  body.innerHTML = '<p class="text-center text-slate-400 py-10">Đang tải bài làm...</p>';
   try {
-    const data = await api('/admin/site-config');
-    cache.siteCfg = data.config || null;
-    cache.unitsDefault = data.unitsDefault || [];
-    cache.unitsIsDefault = data.unitsIsDefault !== false;
+    const d = await api(`/admin/results/${resultId}/paper`);
+    const r = d.result;
+    const u = d.user;
+    const s = computeScales(r.correct, r.total, r);
+    const answerMap = d.answers || {};
+    let answeredCount = 0;
+    let correctCount = 0;
+    const questionsHtml = (d.questions || []).map((q, i) => {
+      const choice = answerMap[q.id];
+      const hasAnswer = Number.isInteger(choice);
+      if (hasAnswer) answeredCount += 1;
+      const isCorrect = hasAnswer && choice === q.correctIndex;
+      if (isCorrect) correctCount += 1;
+      return `
+        <div class="paper-q border border-slate-200 rounded-2xl p-4 mb-3 bg-white">
+          <div class="flex items-start justify-between gap-2">
+            <p class="font-semibold text-slate-800 text-sm">Câu ${i + 1}. ${esc(q.text)}</p>
+            ${!hasAnswer
+              ? '<span class="shrink-0 text-[10px] font-bold text-slate-400 bg-slate-100 rounded px-2 py-0.5">BỎ TRỐNG</span>'
+              : isCorrect
+                ? '<span class="shrink-0 text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded px-2 py-0.5">ĐÚNG ✓</span>'
+                : '<span class="shrink-0 text-[10px] font-bold text-red-600 bg-red-50 border border-red-200 rounded px-2 py-0.5">SAI ✕</span>'}
+          </div>
+          <div class="mt-2.5 grid sm:grid-cols-2 gap-2">
+            ${(q.options || []).map((opt, j) => {
+              const isCorrectOpt = j === q.correctIndex;
+              const isChosen = hasAnswer && choice === j;
+              let cls = 'bg-white border-slate-200 text-slate-600';
+              let mark = '';
+              if (isCorrectOpt && isChosen) { cls = 'bg-emerald-50 border-emerald-400 text-emerald-900 font-semibold'; mark = '✓ đúng & đã chọn'; }
+              else if (isCorrectOpt) { cls = 'bg-emerald-50 border-emerald-300 text-emerald-800'; mark = '✓ đáp án đúng'; }
+              else if (isChosen) { cls = 'bg-red-50 border-red-300 text-red-700 font-semibold'; mark = '✕ thí sinh chọn'; }
+              return `
+                <div class="flex items-start gap-2 text-xs px-3 py-2 rounded-lg border ${cls}">
+                  <span class="shrink-0 font-bold">${String.fromCharCode(65 + j)}.</span>
+                  <span class="min-w-0">${esc(opt)}${mark ? ` <span class="text-[10px] whitespace-nowrap">(${mark})</span>` : ''}</span>
+                </div>`;
+            }).join('')}
+          </div>
+        </div>`;
+    }).join('');
+
+    const noAnswers = !(r.answers && r.answers.length > 0);
+    body.innerHTML = `
+      <div class="rounded-2xl border border-slate-200 p-5 bg-slate-50/70">
+        <div class="grid sm:grid-cols-2 gap-x-6 gap-y-1.5 text-sm">
+          <p>Thí sinh: <b>${esc(r.cccd)}</b>${u ? ` — ${esc(u.position || '')}` : ''}</p>
+          <p>Đơn vị công tác: <b>${esc(u ? u.unit : 'Không rõ')}</b></p>
+          <p>Bài thi: <b>${esc(r.examTitle)}</b></p>
+          <p>Hạng mục: <b>${esc(r.category)}</b></p>
+          <p>Nộp lúc: <b>${fmtDateTime(r.submittedAt)}</b></p>
+          <p>Thời lượng: <b>${fmtDuration(r.durationSeconds)}</b></p>
+        </div>
+        <div class="mt-4 grid grid-cols-3 gap-3 text-center">
+          <div class="rounded-xl border-2 border-flag-500 bg-white py-3"><p class="text-[10px] font-bold uppercase text-flag-700">Thang 10</p><p class="text-2xl font-extrabold text-flag-600">${fmtScore(s.score10)}</p></div>
+          <div class="rounded-xl border border-slate-300 bg-white py-3"><p class="text-[10px] font-bold uppercase text-slate-500">Thang 100</p><p class="text-2xl font-extrabold text-slate-800">${fmtScore(s.score100)}</p></div>
+          <div class="rounded-xl border border-gold-400 bg-white py-3"><p class="text-[10px] font-bold uppercase text-gold-600">Thang 60</p><p class="text-2xl font-extrabold text-gold-600">${fmtScore(s.score60)}</p></div>
+        </div>
+        <p class="mt-3 text-xs text-slate-500">Số câu đúng: <b>${r.correct}/${r.total}</b> · Đã trả lời: <b>${answeredCount}/${(d.questions || []).length}</b>${r.note ? ` · Ghi chú BTC: <b>${esc(r.note)}</b>` : ''}</p>
+        ${noAnswers ? '<p class="mt-2 text-xs text-amber-600">⚠ Bài nộp trước bản nâng cấp R10 nên hệ thống chưa lưu chi tiết từng câu trả lời — chỉ hiển thị được bộ đề.</p>' : ''}
+      </div>
+      <div class="mt-4">${questionsHtml || '<p class="text-center text-slate-400 py-6">Không còn dữ liệu bộ đề của lượt thi này trong ngân hàng câu hỏi.</p>'}</div>
+      <p class="text-[10px] text-slate-400 text-center pb-2">Phiếu in tự động từ Hệ thống thi trực tuyến OES — ${fmtDateTime(new Date().toISOString())}</p>`;
+  } catch (err) {
+    body.innerHTML = `<div class="rounded-xl bg-red-50 border border-red-300 p-4 text-sm text-red-800">Không tải được bài làm: ${esc(err.message)}</div>`;
+  }
+}
+
+function printPaper() {
+  document.body.classList.add('print-paper');
+  setTimeout(() => window.print(), 60);
+}
+
+/* ==================== R10: CẤU HÌNH GIAO DIỆN & GIỜ NHẬN BÀI ==================== */
+let siteFormBusy = false;
+
+async function loadSiteForm() {
+  document.getElementById('sc-error').classList.add('hidden');
+  try {
+    const { config: c } = await api('/admin/site-config');
+    document.getElementById('sc-intake-open').value = isoToVnLocal(c.intakeOpenAt || '');
+    document.getElementById('sc-intake-close').value = isoToVnLocal(c.intakeCloseAt || '');
+    document.getElementById('sc-deadline').value = isoToVnLocal(c.deadlineIso || '');
+    document.getElementById('sc-banner').value = c.bannerUrl || '';
+    updateBannerPreview(c.bannerUrl || '');
+    document.getElementById('sc-marquee').value = c.marquee || '';
+    document.getElementById('sc-hero-badge').value = c.heroBadge || '';
+    document.getElementById('sc-hero-title').value = c.heroTitle || '';
+    document.getElementById('sc-hero-subtitle').value = c.heroSubtitle || '';
+    document.getElementById('sc-intro').value = c.introHtml || '';
+    document.getElementById('sc-principle').value = c.principleHtml || '';
+    document.getElementById('sc-rules').value = c.rulesHtml || '';
   } catch (err) {
     toast(err.message, 'error');
   }
 }
 
-function renderAppearance() {
-  const c = cache.siteCfg;
-  if (!c) return;
-  // 1. Khung giờ nhận bài
-  document.getElementById('cf-openat').value = isoToVnLocal(c.window && c.window.openAt);
-  document.getElementById('cf-closeat').value = isoToVnLocal(c.window && c.window.closeAt);
-  const w = c.window || {};
-  const el = document.getElementById('cf-window-status');
-  if (!w.openAt && !w.closeAt) el.textContent = 'Trạng thái: nhận bài MỌI LÚC (chưa đặt khung giờ).';
-  else {
-    const now = Date.now();
-    const openMs = w.openAt ? Date.parse(w.openAt) : null;
-    const closeMs = w.closeAt ? Date.parse(w.closeAt) : null;
-    if (closeMs && now >= closeMs) el.innerHTML = `Trạng thái: <b class="text-red-600">ĐÃ ĐÓNG</b> từ ${fmtVn(w.closeAt)}.`;
-    else if (openMs && now < openMs) el.innerHTML = `Trạng thái: <b class="text-amber-600">CHƯA MỞ</b> — mở lúc ${fmtVn(w.openAt)}${w.closeAt ? `, đóng ${fmtVn(w.closeAt)}` : ''}.`;
-    else el.innerHTML = `Trạng thái: <b class="text-emerald-600">ĐANG MỞ</b>${w.closeAt ? ` — đóng lúc ${fmtVn(w.closeAt)}` : ''}.`;
+function updateBannerPreview(url) {
+  const img = document.getElementById('sc-banner-preview');
+  if (url && /^https?:\/\//.test(url)) {
+    img.src = url;
+    img.classList.remove('hidden');
+    img.onerror = () => img.classList.add('hidden');
+  } else {
+    img.classList.add('hidden');
   }
-  // 2. Đề thi chính thức
-  const re = c.randomExam || {};
-  document.getElementById('cf-re-enabled').checked = re.enabled !== false;
-  document.getElementById('cf-re-count').value = re.count || 30;
-  document.getElementById('cf-re-duration').value = re.durationMinutes || 20;
-  // 3. Banner + nội dung
-  document.getElementById('cf-banner').value = c.bannerUrl || '';
-  const pv = document.getElementById('cf-banner-preview');
-  if (c.bannerUrl) { pv.src = c.bannerUrl; pv.classList.remove('hidden'); }
-  else pv.classList.add('hidden');
-  document.getElementById('cf-site-name').value = c.siteName || '';
-  document.getElementById('cf-header-sub').value = c.headerSub || '';
-  document.getElementById('cf-hero-title').value = c.heroTitle || '';
-  document.getElementById('cf-hero-lead').value = c.heroLead || '';
-  document.getElementById('cf-notice').value = c.noticeHtml || '';
-  document.getElementById('cf-intro').value = c.introHtml || '';
-  document.getElementById('cf-footer').value = c.footerText || '';
-  // 4. Danh sách đơn vị (đang hiệu lực)
-  const units = Array.isArray(c.units) && c.units.length ? c.units : cache.unitsDefault;
-  document.getElementById('cf-units').value = units.join('\n');
-  document.getElementById('cf-units-hint').textContent =
-    `Đang hiệu lực ${units.length} đơn vị${cache.unitsIsDefault ? ' (danh sách mặc định — thay đổi ở đây rồi bấm Lưu để dùng danh sách riêng)' : ' (danh sách RIÊNG do Admin đặt)'}.`;
 }
+document.getElementById('sc-banner').addEventListener('input', (e) => updateBannerPreview(e.target.value.trim()));
 
-function restoreDefaultUnits() {
-  document.getElementById('cf-units').value = cache.unitsDefault.join('\n');
-  toast('Đã điền danh sách 25 đơn vị mặc định vào ô — nhớ bấm LƯU để áp dụng.', 'info');
-}
-
-async function saveSiteConfig() {
-  if (siteCfgBusy) return;
-  const vnVal = (id) => document.getElementById(id).value.trim();
-  const unitsLines = document.getElementById('cf-units').value.split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
-  // Nếu danh sách gõ vào trùng khớp mặc định → gửi [] để trở về "dùng mặc định".
-  const isDefaultAgain = cache.unitsDefault.length > 0 &&
-    unitsLines.length === cache.unitsDefault.length &&
-    unitsLines.every((u, i) => u === cache.unitsDefault[i]);
-  const body = {
-    bannerUrl: vnVal('cf-banner'),
-    siteName: vnVal('cf-site-name'),
-    headerSub: vnVal('cf-header-sub'),
-    heroTitle: vnVal('cf-hero-title'),
-    heroLead: document.getElementById('cf-hero-lead').value,
-    noticeHtml: document.getElementById('cf-notice').value,
-    introHtml: document.getElementById('cf-intro').value,
-    footerText: document.getElementById('cf-footer').value,
-    window: {
-      openAt: vnLocalToIso(vnVal('cf-openat')) || null,
-      closeAt: vnLocalToIso(vnVal('cf-closeat')) || null,
-    },
-    randomExam: {
-      enabled: document.getElementById('cf-re-enabled').checked,
-      count: parseInt(document.getElementById('cf-re-count').value, 10) || 30,
-      durationMinutes: parseInt(document.getElementById('cf-re-duration').value, 10) || 20,
-    },
-    units: isDefaultAgain ? [] : unitsLines,
-  };
-  siteCfgBusy = true;
-  const btn = document.getElementById('cf-save');
+document.getElementById('form-site').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  if (siteFormBusy) return;
+  siteFormBusy = true;
+  const btn = document.getElementById('sc-submit');
   btn.disabled = true;
   btn.textContent = 'Đang lưu...';
+  const body = {
+    intakeOpenAt: document.getElementById('sc-intake-open').value,
+    intakeCloseAt: document.getElementById('sc-intake-close').value,
+    deadlineIso: document.getElementById('sc-deadline').value,
+    bannerUrl: document.getElementById('sc-banner').value.trim(),
+    marquee: document.getElementById('sc-marquee').value,
+    heroBadge: document.getElementById('sc-hero-badge').value,
+    heroTitle: document.getElementById('sc-hero-title').value,
+    heroSubtitle: document.getElementById('sc-hero-subtitle').value,
+    introHtml: document.getElementById('sc-intro').value,
+    principleHtml: document.getElementById('sc-principle').value,
+    rulesHtml: document.getElementById('sc-rules').value,
+  };
   try {
     const data = await api('/admin/site-config', { method: 'PUT', body });
     toast(data.message, data.synced === false ? 'info' : 'success');
     if (data.synced === false) checkSyncStatus();
-    cache.siteCfg = data.config || cache.siteCfg;
-    cache.unitsIsDefault = !(cache.siteCfg && cache.siteCfg.units && cache.siteCfg.units.length);
-    renderAppearance();
   } catch (err) {
-    toast(err.message, 'error');
+    const el = document.getElementById('sc-error');
+    el.textContent = err.message;
+    el.classList.remove('hidden');
   } finally {
-    siteCfgBusy = false;
+    siteFormBusy = false;
     btn.disabled = false;
-    btn.textContent = '💾 LƯU TẤT CẢ CẤU HÌNH';
-  }
-}
-
-/* Xem trước banner ngay khi Admin dán URL. */
-document.addEventListener('DOMContentLoaded', () => {
-  const bannerInput = document.getElementById('cf-banner');
-  if (bannerInput) {
-    bannerInput.addEventListener('change', () => {
-      const pv = document.getElementById('cf-banner-preview');
-      const v = bannerInput.value.trim();
-      if (v) { pv.src = v; pv.classList.remove('hidden'); }
-      else pv.classList.add('hidden');
-    });
+    btn.textContent = '💾 Lưu cấu hình giao diện';
   }
 });
 
@@ -1262,7 +997,7 @@ document.getElementById('btn-confirm-delete').addEventListener('click', async ()
 
 /* ================================ KHỞI ĐỘNG ================================ */
 (async function main() {
-  await Promise.all([refreshAll(), loadSiteConfigAdmin()]);
+  await refreshAll();
   fillResultFilter();
   switchSection('overview');
   checkSyncStatus(); // Banner cảnh báo dữ liệu chưa an toàn trên Google Drive.

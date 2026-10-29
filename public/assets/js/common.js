@@ -157,6 +157,64 @@ function vnLocalToIso(value) {
   return isNaN(ms) ? undefined : new Date(ms).toISOString();
 }
 
+/* ------------------------- R10: DANH MỤC ĐƠN VỊ CÔNG TÁC ------------------------- */
+/** 25 đơn vị cố định — phải khớp 100% với src/utils/validate.js (server). */
+const OES_UNITS = [
+  'Văn phòng',
+  'Thanh tra - Khiếu tố',
+  'Phòng 1', 'Phòng 2', 'Phòng 3', 'Phòng 7', 'Phòng 8', 'Phòng 9',
+  'Phòng 10', 'Phòng 11', 'Phòng 15',
+  'Khu vực 1', 'Khu vực 2', 'Khu vực 3', 'Khu vực 4', 'Khu vực 5',
+  'Khu vực 6', 'Khu vực 7', 'Khu vực 8', 'Khu vực 9', 'Khu vực 10',
+  'Khu vực 11', 'Khu vực 12',
+  'Trường học',
+  'Nhóm tester',
+];
+
+/** Sinh <option> cho dropdown đơn vị (giữ giá trị ngoài danh mục nếu có). */
+function unitOptionsHtml(selected) {
+  const units = [...OES_UNITS];
+  if (selected && !units.includes(selected)) units.unshift(selected);
+  return '<option value="">— Chọn đơn vị công tác —</option>' +
+    units.map((u) => `<option value="${esc(u)}" ${u === selected ? 'selected' : ''}>${esc(u)}</option>`).join('');
+}
+
+/* ------------------- R10: 3 THANG ĐIỂM 10 / 100 / 60 ------------------- */
+/**
+ * Quy đổi 3 thang chuẩn của cuộc thi (khớp server src/utils/scoring.js):
+ *   Thang 10 = (đúng/tổng)×10 · Thang 100 = (đúng/tổng)×100
+ *   Thang 60 = (đúng/tổng)×60 — đề ngẫu nhiên 30 câu: MỖI CÂU 2 ĐIỂM.
+ * Ưu tiên giá trị server đã lưu (r.score100 / r.score60) nếu có.
+ */
+function computeScales(correct, total, prefill) {
+  const c = Math.max(0, Number(correct) || 0);
+  const t = Math.max(0, Number(total) || 0);
+  const pct = t > 0 ? c / t : 0;
+  const r2 = (x) => Math.round(x * 100) / 100;
+  const p = prefill || {};
+  return {
+    score10: p.score10 !== undefined && p.score10 !== null ? r2(p.score10) : r2(pct * 10),
+    score100: p.score100 !== undefined && p.score100 !== null ? r2(p.score100) : r2(pct * 100),
+    score60: p.score60 !== undefined && p.score60 !== null ? r2(p.score60) : r2(pct * 60),
+  };
+}
+
+/** Định dạng điểm: bỏ số 0 ở cuối (5.5 → "5.5", 5 → "5"). */
+function fmtScore(x) {
+  const n = Math.round((Number(x) || 0) * 100) / 100;
+  return String(n);
+}
+
+/* ------------------- R10: CẤU HÌNH GIAO DIỆN (site config) ------------------- */
+let _siteConfigPromise = null;
+/** Tải cấu hình giao diện (công khai, chỉ đọc) — cache 1 lần/trang. */
+function loadSiteConfig() {
+  if (!_siteConfigPromise) {
+    _siteConfigPromise = api('/site-config', { auth: false }).then((d) => d.config || null).catch(() => null);
+  }
+  return _siteConfigPromise;
+}
+
 /* ------------------------------------ TOAST ------------------------------------ */
 function toast(message, type = 'success') {
   let host = document.getElementById('toast-host');
@@ -190,6 +248,8 @@ function openModal(id) {
 function closeModal(id) {
   const m = document.getElementById(id);
   if (m) { m.classList.add('hidden'); document.body.style.overflow = ''; }
+  // R10: tắt chế độ in khi đóng modal in (paper).
+  document.body.classList.remove('print-paper');
 }
 
 /** Đăng xuất về trang chủ. */

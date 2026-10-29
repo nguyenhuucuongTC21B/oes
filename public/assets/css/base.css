@@ -54,3 +54,35 @@ details.faq[open] .faq-chevron { transform: rotate(180deg); }
 /* Thanh cuộn mảnh */
 ::-webkit-scrollbar { width: 8px; height: 8px; }
 ::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 8px; }
+
+/* ===================== R10: IN PHIẾU KẾT QUẢ / BẢNG TẬP THỂ ===================== */
+/* In bài làm hoàn chỉnh: ẩn toàn bộ trang, chỉ hiển thị modal-paper mở sẵn. */
+@media print {
+  body.print-paper > *:not(#modal-paper) { display: none !important; }
+  body.print-paper #modal-paper {
+    position: static !important;
+    display: block !important;
+    padding: 0 !important;
+    background: #fff !important;
+    overflow: visible !important;
+  }
+  body.print-paper #modal-paper > div {
+    box-shadow: none !important;
+    border: none !important;
+    max-width: none !important;
+    max-height: none !important;
+    padding: 0 !important;
+    overflow: visible !important;
+    margin: 0 !important;
+  }
+  body.print-paper #modal-paper .no-print { display: none !important; }
+  /* Bảng điểm tập thể: ẩn khung điều khiển, in gọn bảng. */
+  body.print-teams header,
+  body.print-teams nav,
+  body.print-teams #sync-banner,
+  body.print-teams .admin-section:not(#section-teams),
+  body.print-teams .no-print { display: none !important; }
+  body.print-teams .admin-section { display: block !important; }
+  body.print-paper, body.print-teams { background: #fff !important; }
+  .paper-q { break-inside: avoid; page-break-inside: avoid; }
+}

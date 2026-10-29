@@ -24,21 +24,6 @@
     };
   </script>
   <link rel="stylesheet" href="/assets/css/base.css" />
-  <style>
-    /* R9: In phiếu kết quả — nội dung phiếu nằm trong #print-area (con trực tiếp của body).
-       Khi in: ẩn mọi thứ khác, chỉ hiện #print-area. Xem trước hiển thị trong modal. */
-    #print-area { display: none; }
-    @media print {
-      body > *:not(#print-area) { display: none !important; }
-      #print-area { display: block !important; }
-      @page { size: A4; margin: 14mm 12mm; }
-      #print-area { color: #000; font-size: 12px; }
-      #print-area .pv-table { width: 100%; border-collapse: collapse; }
-      #print-area .pv-table th, #print-area .pv-table td { border: 1px solid #999; padding: 4px 6px; vertical-align: top; }
-      #print-area .pv-table th { background: #f0f0f0 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-      .no-print { display: none !important; }
-    }
-  </style>
 </head>
 <body class="font-sans bg-[#F4F5F7] text-slate-800 antialiased min-h-screen flex flex-col">
 
@@ -74,11 +59,11 @@
       <button data-section="results" class="nav-btn flex items-center gap-2.5 px-4 py-2.5 rounded-xl text-sm font-semibold whitespace-nowrap transition">
         <span>🏆</span> Bảng điểm
       </button>
-      <button data-section="aggregate" class="nav-btn flex items-center gap-2.5 px-4 py-2.5 rounded-xl text-sm font-semibold whitespace-nowrap transition">
-        <span>🏅</span> Tổng hợp &amp; Đội
+      <button data-section="teams" class="nav-btn flex items-center gap-2.5 px-4 py-2.5 rounded-xl text-sm font-semibold whitespace-nowrap transition">
+        <span>🤝</span> Điểm tập thể
       </button>
-      <button data-section="appearance" class="nav-btn flex items-center gap-2.5 px-4 py-2.5 rounded-xl text-sm font-semibold whitespace-nowrap transition">
-        <span>🎨</span> Giao diện &amp; Thời gian
+      <button data-section="site" class="nav-btn flex items-center gap-2.5 px-4 py-2.5 rounded-xl text-sm font-semibold whitespace-nowrap transition">
+        <span>🎨</span> Giao diện &amp; giờ nhận bài
       </button>
     </nav>
 
@@ -183,53 +168,20 @@
           </div>
         </div>
       </section>
-
-      <!-- ========== TỔNG HỢP & ĐIỂM ĐỘI (R9) ========== -->
-      <section id="section-aggregate" class="admin-section hidden">
+      <!-- ========== ĐIỂM TẬP THỂ (R10) ========== -->
+      <section id="section-teams" class="admin-section hidden">
         <div class="flex items-end justify-between flex-wrap gap-3">
           <div>
-            <h1 class="font-serif text-2xl font-bold text-slate-900">Tổng hợp kết quả &amp; Xét giải tập thể</h1>
-            <p class="text-sm text-slate-500 mt-1">Gom thí sinh theo <b>Đơn vị công tác</b> trong dữ liệu đăng ký. Điểm đội = trung bình điểm của các thí sinh cao nhất của đơn vị.</p>
+            <h1 class="font-serif text-2xl font-bold text-slate-900">Bảng điểm Tập thể theo đơn vị công tác</h1>
+            <p class="text-sm text-slate-500 mt-1">Điểm đội = trung bình thành tích cá nhân cao nhất của các thành viên đã dự thi — công bố 3 thang điểm 10 / 100 / 60.</p>
+          </div>
+          <div class="flex gap-2 no-print">
+            <select id="team-exam-filter" class="field !w-64"><option value="">Đang tải...</option></select>
+            <button onclick="printTeamBoard()" class="px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-600 hover:bg-slate-50 transition">🖨 In bảng</button>
           </div>
         </div>
-
-        <div class="mt-4 bg-white rounded-2xl border border-slate-200 p-4 flex flex-wrap items-end gap-3">
-          <div>
-            <label class="block text-xs font-semibold text-slate-500 mb-1">Bài thi</label>
-            <select id="ag-exam" class="field !w-72"><option value="">Tất cả bài thi</option></select>
-          </div>
-          <div>
-            <label class="block text-xs font-semibold text-slate-500 mb-1">Bài được tính của mỗi thí sinh</label>
-            <select id="ag-mode" class="field !w-56">
-              <option value="latest">Bài nộp mới nhất</option>
-              <option value="best">Điểm cao nhất</option>
-            </select>
-          </div>
-          <div>
-            <label class="block text-xs font-semibold text-slate-500 mb-1">Điểm đội = TB của Top</label>
-            <select id="ag-topk" class="field !w-32">
-              <option value="1">Top 1</option>
-              <option value="2">Top 2</option>
-              <option value="3" selected>Top 3</option>
-              <option value="5">Top 5</option>
-            </select>
-          </div>
-          <div>
-            <label class="block text-xs font-semibold text-slate-500 mb-1">Số thành viên tối thiểu để xét giải</label>
-            <input id="ag-min" class="field !w-32" type="number" min="1" max="50" value="3" />
-          </div>
-          <div class="flex gap-2 ml-auto">
-            <button onclick="exportIndividualsCsv()" class="px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-600 hover:bg-slate-50 transition">⤓ CSV cá nhân</button>
-            <button onclick="exportTeamsCsv()" class="px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-600 hover:bg-slate-50 transition">⤓ CSV đội</button>
-          </div>
-        </div>
-
-        <!-- Bảng xếp hạng ĐỘI -->
-        <div class="mt-5 bg-white rounded-2xl border border-slate-200 overflow-hidden">
-          <div class="px-5 py-4 border-b border-slate-100 flex items-center justify-between flex-wrap gap-2">
-            <h2 class="font-bold text-slate-900">Bảng xếp hạng TẬP THỂ theo đơn vị</h2>
-            <p class="text-xs text-slate-400">Giải hòa: điểm cá nhân cao nhất → nhì → tỷ lệ hoàn thành → thời gian làm bài.</p>
-          </div>
+        <div class="mt-3 text-sm text-slate-500" id="team-summary"></div>
+        <div class="mt-3 bg-white rounded-2xl border border-slate-200 overflow-hidden">
           <div class="overflow-x-auto">
             <table class="w-full text-sm">
               <thead class="bg-slate-50 text-slate-500 uppercase text-[11px] tracking-wider">
@@ -237,150 +189,94 @@
                   <th class="text-left px-4 py-3.5">Hạng</th>
                   <th class="text-left px-4 py-3.5">Đơn vị công tác</th>
                   <th class="text-center px-3 py-3.5">Đăng ký</th>
-                  <th class="text-center px-3 py-3.5">Đã thi</th>
-                  <th class="text-left px-4 py-3.5">Điểm đội</th>
-                  <th class="text-left px-4 py-3.5">Chi tiết thành phần</th>
-                  <th class="text-center px-3 py-3.5">TB tất cả</th>
+                  <th class="text-center px-3 py-3.5">Dự thi</th>
+                  <th class="text-center px-3 py-3.5">Tỷ lệ</th>
+                  <th class="text-center px-3 py-3.5">TB thang 10</th>
+                  <th class="text-center px-3 py-3.5">TB thang 100</th>
+                  <th class="text-center px-3 py-3.5">TB thang 60</th>
+                  <th class="text-center px-3 py-3.5">Cao nhất (10)</th>
+                  <th class="text-left px-4 py-3.5">3 thành viên tốt nhất</th>
                 </tr>
               </thead>
               <tbody id="teams-tbody" class="divide-y divide-slate-100"></tbody>
             </table>
           </div>
         </div>
-
-        <!-- Bảng điểm CÁ NHÂN -->
-        <div class="mt-5 bg-white rounded-2xl border border-slate-200 overflow-hidden">
-          <div class="px-5 py-4 border-b border-slate-100 flex items-center justify-between flex-wrap gap-2">
-            <h2 class="font-bold text-slate-900">Bảng điểm CÁ NHÂN</h2>
-            <p class="text-xs text-slate-400">Giải hòa: điểm cao hơn → làm bài nhanh hơn → nộp sớm hơn.</p>
-          </div>
-          <div class="overflow-x-auto">
-            <table class="w-full text-sm">
-              <thead class="bg-slate-50 text-slate-500 uppercase text-[11px] tracking-wider">
-                <tr>
-                  <th class="text-left px-4 py-3.5">Hạng</th>
-                  <th class="text-left px-4 py-3.5">Thí sinh</th>
-                  <th class="text-left px-4 py-3.5">Đơn vị công tác</th>
-                  <th class="text-left px-4 py-3.5">Kết quả</th>
-                  <th class="text-left px-4 py-3.5">Thời gian</th>
-                  <th class="text-right px-4 py-3.5">Phiếu</th>
-                </tr>
-              </thead>
-              <tbody id="ag-tbody" class="divide-y divide-slate-100"></tbody>
-            </table>
-          </div>
-        </div>
+        <p class="mt-3 text-[11px] text-slate-400 leading-relaxed">“Nhóm tester” không xét giải tập thể (hiển thị cuối bảng). Điểm TB thang 60 của đề 30 câu tương ứng mỗi câu 2 điểm. Bấm “In bảng” để in bảng điểm tập thể hiện tại.</p>
       </section>
 
-      <!-- ========== GIAO DIỆN & THỜI GIAN (R10) ========== -->
-      <section id="section-appearance" class="admin-section hidden">
-        <div class="flex items-end justify-between flex-wrap gap-3">
-          <div>
-            <h1 class="font-serif text-2xl font-bold text-slate-900">Giao diện &amp; Thời gian nhận bài</h1>
-            <p class="text-sm text-slate-500 mt-1">Thay banner, sửa nội dung các khối trang chủ, đặt khung giờ nhận bài dự thi và cấu hình đề thi chính thức — không cần sửa code.</p>
-          </div>
-        </div>
-
-        <!-- 1. THỜI GIAN NHẬN BÀI DỰ THI -->
-        <div class="mt-5 bg-white rounded-2xl border border-slate-200 p-6">
-          <h2 class="font-bold text-slate-900">⏰ Thời gian nhận bài dự thi (áp dụng TOÀN HỆ THỐNG)</h2>
-          <p class="text-xs text-slate-500 mt-1">Ngoài khung giờ, thí sinh KHÔNG thể vào bài mới (bài đang làm vẫn nộp được). Bỏ trống cả 2 ô = nhận bài mọi lúc. Giờ Việt Nam GMT+7. Đề có khung giờ riêng sẽ bị ghép khắt khe hơn giữa 2 khung.</p>
-          <div class="mt-4 grid sm:grid-cols-2 gap-3">
-            <div>
-              <label class="block text-xs font-semibold text-slate-600 mb-1">Bắt đầu nhận bài từ (bỏ trống = luôn mở)</label>
-              <input id="cf-openat" class="field" type="datetime-local" />
-            </div>
-            <div>
-              <label class="block text-xs font-semibold text-slate-600 mb-1">Kết thúc nhận bài lúc (bỏ trống = không giới hạn)</label>
-              <input id="cf-closeat" class="field" type="datetime-local" />
-            </div>
-          </div>
-          <p id="cf-window-status" class="mt-3 text-sm text-slate-600"></p>
-        </div>
-
-        <!-- 2. ĐỀ THI CHÍNH THỨC (NGẪU NHIÊN) -->
-        <div class="mt-5 bg-white rounded-2xl border border-slate-200 p-6">
-          <h2 class="font-bold text-slate-900">🎯 Đề thi chính thức — bộ đề riêng 30 câu mỗi thí sinh</h2>
-          <p class="text-xs text-slate-500 mt-1">Trộn từ ngân hàng câu hỏi của <b>Bộ đề số 6 (exam_c6 — Luật An ninh mạng 2026)</b>. Mỗi thí sinh nhận bộ đề TẤT ĐỊNH riêng theo số CCCD, chỉ thi 1 lần.</p>
-          <div class="mt-4 flex flex-wrap items-end gap-4">
-            <label class="flex items-center gap-2 text-sm font-semibold text-slate-700 cursor-pointer">
-              <input id="cf-re-enabled" type="checkbox" class="accent-red-700 w-4 h-4" />
-              <span>Hiển thị đề này cho thí sinh</span>
-            </label>
-            <div>
-              <label class="block text-xs font-semibold text-slate-600 mb-1">Số câu mỗi thí sinh (5–100)</label>
-              <input id="cf-re-count" class="field !w-36" type="number" min="5" max="100" value="30" />
-            </div>
-            <div>
-              <label class="block text-xs font-semibold text-slate-600 mb-1">Thời lượng làm bài (phút, 5–240)</label>
-              <input id="cf-re-duration" class="field !w-44" type="number" min="5" max="240" value="20" />
-            </div>
-          </div>
-          <p class="mt-3 text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">Lưu ý: thay đổi SỐ CÂU/THỜI LƯỢNG chỉ áp dụng cho các lượt thi bắt đầu SAU khi lưu; thí sinh đang làm dở giữ nguyên đồng hồ của lượt cũ. Yêu cầu đề 6 đã có trong hệ thống.</p>
-        </div>
-
-        <!-- 3. BANNER & NỘI DUNG TRANG CHỦ -->
-        <div class="mt-5 bg-white rounded-2xl border border-slate-200 p-6">
-          <h2 class="font-bold text-slate-900">🖼 Banner &amp; nội dung các khối trang chủ</h2>
-          <p class="text-xs text-slate-500 mt-1">Ô bỏ trống = giữ nguyên nội dung mẫu hiện có. Nhấn LƯU CUỐI TRANG để áp dụng.</p>
-          <div class="mt-4 grid gap-4">
-            <div class="grid sm:grid-cols-[1fr,auto] gap-3 items-start">
+      <!-- ========== GIAO DIỆN & GIỜ NHẬN BÀI (R10) ========== -->
+      <section id="section-site" class="admin-section hidden">
+        <h1 class="font-serif text-2xl font-bold text-slate-900">Chỉnh sửa giao diện &amp; thời gian nhận bài dự thi</h1>
+        <p class="text-sm text-slate-500 mt-1">Thay đổi được áp dụng NGAY cho trang chủ (mọi thí sinh thấy trong tối đa 15 giây). Bỏ trống = dùng nội dung mặc định.</p>
+        <form id="form-site" class="mt-5 space-y-5" novalidate>
+          <div class="bg-white rounded-2xl border border-slate-200 p-6">
+            <h2 class="font-bold text-slate-900">⏰ Thời gian nhận bài dự thi</h2>
+            <p class="text-xs text-slate-400 mt-1">Chặn lượt thi MỚI của đề ngẫu nhiên ngoài khung giờ này (lượt đang làm vẫn được nộp). Đếm ngược trên trang chủ theo “Hạn nhận bài”.</p>
+            <div class="mt-4 grid sm:grid-cols-3 gap-3">
               <div>
-                <label class="block text-xs font-semibold text-slate-600 mb-1">Banner (URL ảnh hoặc /tên-file.png trong hệ thống — trống = ẩn banner)</label>
-                <input id="cf-banner" class="field" type="text" placeholder="/banner.png hoặc https://..." />
-              </div>
-              <img id="cf-banner-preview" src="/banner.png" alt="Xem trước banner" class="h-20 w-44 object-cover rounded-xl border border-slate-200 hidden" onerror="this.classList.add('hidden')" />
-            </div>
-            <div class="grid sm:grid-cols-2 gap-3">
-              <div>
-                <label class="block text-xs font-semibold text-slate-600 mb-1">Tiêu đề header (dòng 1)</label>
-                <input id="cf-site-name" class="field" type="text" placeholder="VD: Cuộc thi Trắc nghiệm" />
+                <label class="block text-xs font-semibold text-slate-600 mb-1">Mở cửa nhận bài từ (giờ VN)</label>
+                <input id="sc-intake-open" class="field" type="datetime-local" />
               </div>
               <div>
-                <label class="block text-xs font-semibold text-slate-600 mb-1">Tiêu đề header (dòng 2 — mô tả)</label>
-                <input id="cf-header-sub" class="field" type="text" placeholder="VD: Tìm hiểu Luật An ninh mạng 2026" />
+                <label class="block text-xs font-semibold text-slate-600 mb-1">Đóng cửa nhận bài lúc (giờ VN)</label>
+                <input id="sc-intake-close" class="field" type="datetime-local" />
+              </div>
+              <div>
+                <label class="block text-xs font-semibold text-slate-600 mb-1">Hạn nhận bài (đếm ngược trang chủ)</label>
+                <input id="sc-deadline" class="field" type="datetime-local" />
               </div>
             </div>
-            <div>
-              <label class="block text-xs font-semibold text-slate-600 mb-1">Tiêu đề lớn trang chủ (hero)</label>
-              <input id="cf-hero-title" class="field" type="text" placeholder="VD: Cuộc thi Trắc nghiệm Tìm hiểu về Luật An ninh mạng NĂM 2026" />
-            </div>
-            <div>
-              <label class="block text-xs font-semibold text-slate-600 mb-1">Đoạn dẫn nhập dưới tiêu đề hero</label>
-              <textarea id="cf-hero-lead" class="field" rows="3" placeholder="Nội dung giới thiệu ngắn hiển thị ngay dưới tiêu đề lớn..."></textarea>
-            </div>
-            <div>
-              <label class="block text-xs font-semibold text-slate-600 mb-1">Thanh thông báo nổi bật (hiển thị dưới hero — cho phép HTML đơn giản: &lt;b&gt;, &lt;a href&gt;, &lt;br&gt;)</label>
-              <textarea id="cf-notice" class="field" rows="2" placeholder="VD: 🔔 Nhận bài dự thi từ 07/11/2026 — mời đồng chí đăng ký và thi thử trước 1 ngày!"></textarea>
-            </div>
-            <div>
-              <label class="block text-xs font-semibold text-slate-600 mb-1">Nội dung khối “Giới thiệu chung” (thay toàn bộ khối — HTML: mỗi &lt;p&gt; là 1 đoạn)</label>
-              <textarea id="cf-intro" class="field font-mono text-xs" rows="6" placeholder="&lt;p&gt;1. Bối cảnh cuộc thi...&lt;/p&gt;&lt;p&gt;2. Ba trụ cột nội dung...&lt;/p&gt;"></textarea>
-            </div>
-            <div>
-              <label class="block text-xs font-semibold text-slate-600 mb-1">Đoạn giới thiệu footer</label>
-              <textarea id="cf-footer" class="field" rows="2" placeholder="VD: Hệ thống thi trực tuyến của Viện Kiểm sát nhân dân thành phố Đà Nẵng."></textarea>
+          </div>
+          <div class="bg-white rounded-2xl border border-slate-200 p-6">
+            <h2 class="font-bold text-slate-900">🖼 Banner &amp; khối hero trang chủ</h2>
+            <div class="mt-4 grid gap-3">
+              <div>
+                <label class="block text-xs font-semibold text-slate-600 mb-1">Ảnh banner hero (URL https — bỏ trống giữ nền gradient mặc định)</label>
+                <input id="sc-banner" class="field" type="url" placeholder="https://...jpg" />
+                <img id="sc-banner-preview" class="hidden mt-2 max-h-40 rounded-xl border border-slate-200" alt="Xem trước banner" />
+              </div>
+              <div>
+                <label class="block text-xs font-semibold text-slate-600 mb-1">Băng rôn khẩu hiệu chạy ngang (marquee)</label>
+                <textarea id="sc-marquee" class="field" rows="2" placeholder="★ Khẩu hiệu 1 ★ Khẩu hiệu 2 ..."></textarea>
+              </div>
+              <div>
+                <label class="block text-xs font-semibold text-slate-600 mb-1">Nhãn nhỏ trên hero (badge)</label>
+                <input id="sc-hero-badge" class="field" type="text" placeholder="VD: ★ Ban Tổ chức trân trọng kính mời" />
+              </div>
+              <div>
+                <label class="block text-xs font-semibold text-slate-600 mb-1">Tiêu đề lớn hero (cho phép HTML)</label>
+                <textarea id="sc-hero-title" class="field" rows="3" placeholder="Cuộc thi Trắc nghiệm..."></textarea>
+              </div>
+              <div>
+                <label class="block text-xs font-semibold text-slate-600 mb-1">Đoạn mô tả hero (cho phép HTML)</label>
+                <textarea id="sc-hero-subtitle" class="field" rows="4"></textarea>
+              </div>
             </div>
           </div>
-        </div>
-
-        <!-- 4. DANH SÁCH ĐƠN VỊ CÔNG TÁC -->
-        <div class="mt-5 bg-white rounded-2xl border border-slate-200 p-6">
-          <div class="flex items-center justify-between flex-wrap gap-2">
-            <div>
-              <h2 class="font-bold text-slate-900">🏛 Danh sách Đơn vị công tác (dropdown đăng ký + gom đội thi)</h2>
-              <p class="text-xs text-slate-500 mt-1">Mỗi dòng 1 đơn vị. Để TRỐNG hoàn toàn = dùng danh sách mặc định 25 đơn vị của Ban Tổ chức.</p>
+          <div class="bg-white rounded-2xl border border-slate-200 p-6">
+            <h2 class="font-bold text-slate-900">📄 Nội dung các khối div trang chủ</h2>
+            <div class="mt-4 grid gap-3">
+              <div>
+                <label class="block text-xs font-semibold text-slate-600 mb-1">Khối “Giới thiệu chung” (HTML — bọc mỗi đoạn trong &lt;p&gt;...&lt;/p&gt;)</label>
+                <textarea id="sc-intro" class="field" rows="6" placeholder="<p>Đoạn 1...</p><p>Đoạn 2...</p>"></textarea>
+              </div>
+              <div>
+                <label class="block text-xs font-semibold text-slate-600 mb-1">Khối “Nguyên tắc chấm điểm” (HTML)</label>
+                <textarea id="sc-principle" class="field" rows="4"></textarea>
+              </div>
+              <div>
+                <label class="block text-xs font-semibold text-slate-600 mb-1">Khối “Lưu ý” trong Thể lệ (HTML)</label>
+                <textarea id="sc-rules" class="field" rows="4"></textarea>
+              </div>
             </div>
-            <button type="button" onclick="restoreDefaultUnits()" class="text-xs font-semibold text-flag-600 hover:text-flag-800">↺ Khôi phục mặc định 25 đơn vị</button>
           </div>
-          <textarea id="cf-units" class="field font-mono text-xs mt-3" rows="10" spellcheck="false"></textarea>
-          <p id="cf-units-hint" class="mt-2 text-xs text-slate-400"></p>
-        </div>
-
-        <div class="mt-5 flex gap-3">
-          <button onclick="loadSiteConfigAdmin()" class="px-5 py-2.5 rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-600 hover:bg-slate-50 transition">↺ Nạp lại</button>
-          <button id="cf-save" onclick="saveSiteConfig()" class="flex-1 bg-flag-600 hover:bg-flag-700 text-white font-bold text-sm px-6 py-2.5 rounded-xl transition">💾 LƯU TẤT CẢ CẤU HÌNH</button>
-        </div>
+          <p id="sc-error" class="hidden text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2"></p>
+          <div class="flex gap-3">
+            <button type="button" onclick="loadSiteForm()" class="px-5 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-semibold text-sm hover:bg-slate-50">Hoàn tác</button>
+            <button id="sc-submit" type="submit" class="flex-1 px-6 py-2.5 rounded-xl bg-flag-600 hover:bg-flag-700 text-white font-bold text-sm">💾 Lưu cấu hình giao diện</button>
+          </div>
+        </form>
       </section>
     </main>
   </div>
@@ -582,23 +478,23 @@
     </div>
   </div>
 
-  <!-- ============ R9: MODAL XEM TRƯỚC PHIẾU KẾT QUẢ (in / lưu PDF) ============ -->
-  <div id="modal-print" class="hidden fixed inset-0 z-50 bg-black/50 flex items-start sm:items-center justify-center p-4 overflow-y-auto">
-    <div class="bg-white rounded-2xl shadow-soft w-full max-w-3xl p-5 sm:my-6 max-h-none sm:max-h-[94vh] overflow-y-auto">
-      <div class="flex items-center justify-between no-print">
-        <h3 class="font-serif text-lg font-bold text-slate-900">Phiếu kết quả thi — xem trước</h3>
-        <button onclick="closeModal('modal-print')" class="text-slate-400 hover:text-slate-600 text-xl leading-none">✕</button>
+  <!-- ============ MODAL: PHIẾU BÀI LÀM HOÀN CHỈNH (R10) ============ -->
+  <div id="modal-paper" class="hidden fixed inset-0 z-50 bg-black/50 flex items-start sm:items-center justify-center p-4 overflow-y-auto">
+    <div class="bg-white rounded-2xl shadow-soft w-full max-w-3xl p-6 sm:my-6 max-h-none sm:max-h-[94vh] overflow-y-auto">
+      <div class="flex items-start justify-between sticky top-0 bg-white pb-3 border-b border-slate-100 no-print">
+        <div class="min-w-0">
+          <h3 class="font-serif text-lg font-bold text-slate-900">Phiếu bài làm của thí sinh</h3>
+          <p class="text-xs text-slate-400 mt-0.5">Xem &amp; in toàn bộ bài làm — đáp án đúng và lựa chọn của thí sinh</p>
+        </div>
+        <button onclick="closeModal('modal-paper')" class="text-slate-400 hover:text-slate-600 text-xl leading-none shrink-0 ml-3">✕</button>
       </div>
-      <div id="print-preview" class="mt-3 border border-slate-200 rounded-xl p-5 text-sm text-slate-800 bg-white overflow-x-auto"></div>
-      <div class="mt-4 flex gap-3 no-print">
-        <button type="button" onclick="closeModal('modal-print')" class="flex-1 px-4 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-semibold text-sm hover:bg-slate-50">Đóng</button>
-        <button type="button" onclick="window.print()" class="flex-1 px-4 py-2.5 rounded-xl bg-flag-600 hover:bg-flag-700 text-white font-bold text-sm">🖨 In / Lưu PDF</button>
+      <div id="paper-body" class="mt-4 text-sm text-slate-700"></div>
+      <div class="flex gap-3 sticky bottom-0 bg-white pt-3 pb-1 border-t border-slate-100 no-print">
+        <button type="button" onclick="closeModal('modal-paper')" class="flex-1 px-4 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-semibold text-sm hover:bg-slate-50">Đóng</button>
+        <button type="button" onclick="printPaper()" class="flex-1 px-4 py-2.5 rounded-xl bg-flag-600 hover:bg-flag-700 text-white font-bold text-sm">🖨 In phiếu bài làm</button>
       </div>
     </div>
   </div>
-
-  <!-- R9: khu vực chỉ dùng cho IN (ẩn trên màn hình, hiện khi in) -->
-  <div id="print-area"></div>
 
   <script src="/assets/js/common.js"></script>
   <script src="/assets/js/admin.js"></script>

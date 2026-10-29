@@ -87,6 +87,7 @@ document.getElementById('form-register').addEventListener('submit', async (e) =>
   if (!/^\d{12}$/.test(payload.cccd)) return showError('rg-error', 'Số CCCD phải gồm đúng 12 chữ số.');
   if (!/^0\d{9}$/.test(payload.phone)) return showError('rg-error', 'Số điện thoại gồm 10 số và bắt đầu bằng 0 (VD: 0912345678).');
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(payload.email)) return showError('rg-error', 'Địa chỉ email không hợp lệ.');
+  if (!OES_UNITS.includes(payload.unit)) return showError('rg-error', 'Vui lòng CHỌN đúng đơn vị công tác trong danh mục xổ xuống.');
   if (payload.password.length < 6) return showError('rg-error', 'Mật khẩu phải có ít nhất 6 ký tự.');
   if (payload.password !== confirm) return showError('rg-error', 'Mật khẩu nhập lại không khớp.');
   if (!agree) return showError('rg-error', 'Vui lòng cam kết tuân theo thể lệ trước khi đăng ký.');
@@ -105,35 +106,3 @@ document.getElementById('form-register').addEventListener('submit', async (e) =>
 
 /* Nếu đã đăng nhập rồi thì đưa thẳng vào hệ thống. */
 if (Auth.token() && Auth.user()) goAfterAuth(Auth.user());
-
-/* -------------------- R10: DANH SÁCH ĐƠN VỊ CÔNG TÁC -------------------- */
-/* Nạp danh sách đơn vị từ server (Admin chỉnh được trong mục Giao diện & Thời gian).
- * Nếu server chưa trả lời kịp/mất mạng → dùng danh sách 25 đơn vị mặc định. */
-const OES_UNITS_FALLBACK = [
-  'Văn phòng', 'Thanh tra - Khiếu tố', 'Phòng 1', 'Phòng 2', 'Phòng 3', 'Phòng 7',
-  'Phòng 8', 'Phòng 9', 'Phòng 10', 'Phòng 11', 'Phòng 15',
-  'Khu vực 1', 'Khu vực 2', 'Khu vực 3', 'Khu vực 4', 'Khu vực 5', 'Khu vực 6',
-  'Khu vực 7', 'Khu vực 8', 'Khu vực 9', 'Khu vực 10', 'Khu vực 11', 'Khu vực 12',
-  'Trường học', 'Nhóm tester',
-];
-
-function fillUnitSelect(selectId, units) {
-  const sel = document.getElementById(selectId);
-  if (!sel) return;
-  const current = sel.value;
-  sel.innerHTML = '<option value="">— Vui lòng chọn đơn vị —</option>' +
-    units.map((u) => `<option value="${esc(u)}">${esc(u)}</option>`).join('');
-  if (current && units.includes(current)) sel.value = current;
-}
-
-(async function loadUnits() {
-  const sel = document.getElementById('rg-unit');
-  if (!sel) return;
-  fillUnitSelect('rg-unit', OES_UNITS_FALLBACK);
-  try {
-    const data = await api('/site-config', { auth: false });
-    if (data && data.config && Array.isArray(data.config.units) && data.config.units.length) {
-      fillUnitSelect('rg-unit', data.config.units);
-    }
-  } catch { /* giữ danh sách dự phòng */ }
-})();
