@@ -126,10 +126,14 @@ async function renderExamList() {
       return;
     }
     grid.innerHTML = exams.map((e) => `
-      <article class="bg-white rounded-2xl border border-slate-100 shadow-sm p-6 flex flex-col hover:shadow-soft transition" data-exam-card="${esc(e.id)}">
-        <span class="self-start bg-flag-50 text-flag-700 text-[11px] font-bold uppercase tracking-wider px-2 py-1 rounded">${esc(e.category)}</span>
+      <article class="bg-white rounded-2xl border shadow-sm p-6 flex flex-col hover:shadow-soft transition ${e.isRandom ? 'border-amber-300 ring-1 ring-amber-200' : 'border-slate-100'}" data-exam-card="${esc(e.id)}">
+        <div class="flex items-center gap-2 flex-wrap">
+          <span class="bg-flag-50 text-flag-700 text-[11px] font-bold uppercase tracking-wider px-2 py-1 rounded">${esc(e.category)}</span>
+          ${e.isRandom ? '<span class="bg-amber-100 text-amber-800 text-[11px] font-bold uppercase tracking-wider px-2 py-1 rounded">Đề riêng mỗi thí sinh</span>' : ''}
+        </div>
         <h2 class="font-serif font-bold text-lg text-slate-900 mt-3 leading-snug">${esc(e.title)}</h2>
         <p class="text-sm text-slate-500 mt-2 leading-relaxed flex-1">${esc(e.description || 'Đề thi trắc nghiệm kiến thức pháp luật.')}</p>
+        ${e.isRandom ? '<p class="mt-2 text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">Hệ thống tự trộn 30 câu riêng cho bạn từ ngân hàng 150 câu — mỗi thí sinh một bộ đề khác nhau, chỉ được thi một lần.</p>' : ''}
         <div class="mt-4 flex items-center gap-4 text-xs text-slate-400">
           <span>📝 ${e.questionCount} câu</span>
           <span>⏱ ${e.durationMinutes} phút</span>
@@ -206,9 +210,9 @@ async function startExam(examId) {
     showView('view-quiz');
   } catch (err) {
     toast(err.message, 'error');
-    // Bị máy chủ chặn vì giờ thi quy định (423) → nạp lại danh sách để nút
-    // "Vào thi" chuyển sang trạng thái khóa đúng lúc.
-    if (err.status === 423) {
+    // Bị máy chủ chặn vì giờ thi quy định (423) hoặc đã hoàn thành bài thi rồi
+    // (403 — đề chính thức chỉ thi 1 lần) → nạp lại danh sách để nút chuyển trạng thái.
+    if (err.status === 423 || err.status === 403) {
       state.examId = null;
       renderExamList();
     }
@@ -344,11 +348,47 @@ async function doSubmit() {
   }
 }
 
+/**
+ * R9: GIÃN NỘP BÀI TỰ ĐỘNG — khi hàng trăm thí sinh cùng hết giờ (ví dụ 20 phút),
+ * nếu tất cả nộp đúng giây thứ 0 thì các lần ghi dữ liệu bị dồn về một thời điểm.
+ * Mỗi thí sinh được cấp 1 độ trễ 0–9 giây TẤT ĐỊNH theo băm CCCD (người khác nhau
+ * → độ trễ khác nhau) rồi mới tự nộp. Máy chủ vẫn tính đúng thời lượng làm bài,
+ * không trừ điểm vì chậm vài giây giãn nộp.
+ */
+function cccdJitterMs() {
+  const s = String((Auth.user() && Auth.user().cccd) || '');
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 16777619) >>> 0;
+  }
+  return (h % 10) * 1000;
+}
+
 function autoSubmit() {
   if (state.submitting) return;
-  toast('Hết giờ làm bài! Hệ thống tự động nộp bài của bạn.', 'info');
-  doSubmit();
+  const delay = cccdJitterMs();
+  if (delay <= 0) {
+    toast('Hết giờ làm bài! Hệ thống tự động nộp bài của bạn.', 'info');
+    doSubmit();
+    return;
+  }
+  // Chặn nộp tay trong lúc chờ giãn nộp; nếu tab bị đóng thì nộp ngay lập tức.
+  state.pendingAutoSubmit = true;
+  toast(`Hết giờ làm bài! Hệ thống sẽ tự nộp bài của bạn sau ${Math.round(delay / 1000)} giây — đừng đóng trang.`, 'info');
+  setTimeout(() => {
+    state.pendingAutoSubmit = false;
+    doSubmit();
+  }, delay);
 }
+
+/* R9: nếu tab bị đóng/chuyển trang trong lúc chờ giãn nộp → nộp ngay lập tức. */
+window.addEventListener('pagehide', () => {
+  if (state.pendingAutoSubmit) {
+    state.pendingAutoSubmit = false;
+    doSubmit();
+  }
+});
 
 function setBusyUI(busy) {
   for (const id of ['btn-submit-top', 'btn-submit-side', 'btn-confirm-submit']) {

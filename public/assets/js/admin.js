@@ -36,6 +36,7 @@ function switchSection(name) {
   if (name === 'users') renderUsers();
   if (name === 'exams') renderExams();
   if (name === 'results') renderResults();
+  if (name === 'aggregate') renderAggregate();
 }
 for (const btn of document.querySelectorAll('.nav-btn')) {
   btn.addEventListener('click', () => switchSection(btn.dataset.section));
@@ -223,7 +224,19 @@ function renderExams() {
       </div>`;
     return;
   }
-  host.innerHTML = cache.exams.map((e) => `
+  host.innerHTML = cache.exams.map((e) => e.isRandom ? `
+    <article class="bg-amber-50/60 rounded-2xl border border-amber-300 p-5 flex flex-col">
+      <div class="flex items-start justify-between gap-2">
+        <span class="bg-amber-100 text-amber-800 text-[11px] font-bold uppercase tracking-wider px-2 py-1 rounded">Đề tự động sinh</span>
+        <span class="text-[11px] text-slate-400">${fmtDate(e.createdAt)}</span>
+      </div>
+      <h3 class="font-bold text-slate-900 mt-3 leading-snug">${esc(e.title)}</h3>
+      <p class="text-xs text-slate-500 mt-1.5 leading-relaxed flex-1">Hệ thống tự trộn cho <b>MỖI thí sinh một bộ ${e.questionCount} câu riêng</b> từ Bộ đề số 6 (150 câu), thời gian làm bài ${e.durationMinutes} phút, mỗi thí sinh chỉ thi một lần. Đề này KHÔNG cần tạo/xóa/sửa — cấu hình nằm trong RANDOM_EXAM (api/index.js). Khung giờ thi kế thừa từ đề nguồn (Bộ đề số 6).</p>
+      ${examScheduleChip(e)}
+      <div class="mt-3 flex items-center gap-3 text-xs text-slate-400">
+        <span>📝 ${e.questionCount} câu</span><span>⏱ ${e.durationMinutes} phút</span>
+      </div>
+    </article>` : `
     <article class="bg-white rounded-2xl border border-slate-200 p-5 flex flex-col">
       <div class="flex items-start justify-between gap-2">
         <span class="bg-flag-50 text-flag-700 text-[11px] font-bold uppercase tracking-wider px-2 py-1 rounded">${esc(e.category)}</span>
@@ -685,6 +698,7 @@ function renderResults() {
           ${r.editedAt ? `<div class="text-amber-600">Sửa: ${fmtDateTime(r.editedAt)}</div>` : ''}
         </td>
         <td class="px-5 py-3.5 text-right whitespace-nowrap">
+          <button onclick="openPrintPhieu('${esc(r.id)}')" title="In phiếu kết quả của thí sinh này" class="text-slate-500 hover:text-flag-700 font-semibold text-xs px-2 py-1.5">In</button>
           <button onclick="openResultModal('${esc(r.id)}')" class="text-flag-600 hover:text-flag-800 font-semibold text-xs px-2 py-1.5">Sửa</button>
           <button onclick="askDeleteResult('${esc(r.id)}')" class="text-red-500 hover:text-red-700 font-semibold text-xs px-2 py-1.5">Xóa</button>
         </td>
@@ -748,6 +762,344 @@ function askDeleteResult(id) {
     renderResults();
     renderOverview();
   });
+}
+
+/* ==================== R9: TỔNG HỢP & XÉT GIẢI TẬP THỂ ====================
+ * Nguyên tắc:
+ *  - Gom đội theo "Đơn vị công tác" (user.unit) trong dữ liệu đăng ký. Chuẩn hóa
+ *    tên đơn vị (trim + gộp khoảng trắng + không phân biệt hoa/thường) để
+ *    "VKS Quận 1" và "vks   quận 1" vẫn là một đội.
+ *  - Điểm đội = trung bình điểm của Top k thí sinh cao nhất của đơn vị (mặc định
+ *    k=3, chỉnh được). Cách này công bằng giữa đơn vị đông/người ít, không bị
+ *    "pha" điểm bởi số lượng và khuyến khích chuẩn bị kỹ.
+ *  - Đơn vị cần tối thiểu N bài thi (mặc định 3) mới đủ điều kiện xét giải;
+ *    đơn vị thiếu người vẫn hiển thị nhưng không xếp hạng.
+ *  - Giải hòa đội: điểm cá nhân cao nhất → nhì → tỷ lệ hoàn thành → thời gian TB.
+ *  - Giải hòa cá nhân: điểm cao hơn → làm bài nhanh hơn → nộp sớm hơn.
+ */
+const ORG_LINE = 'VIỆN KIỂM SÁT NHÂN DÂN TP. ĐÀ NẴNG'; // ← sửa dòng đầu của phiếu in tại đây
+const CONTEST_LINE = 'CUỘC THI TRẮC NGHIỆM PHÁP LUẬT TRỰC TUYẾN NĂM 2026';
+
+function normalizeUnitKey(v) {
+  return String(v || '').trim().replace(/\s+/g, ' ').toLowerCase() || '(chưa xác định)';
+}
+function displayUnit(v) {
+  return (v && String(v).trim()) ? String(v).trim() : 'Chưa xác định đơn vị';
+}
+function agExamKey(r) {
+  return r.examId || r.examTitle || r.category || '';
+}
+function agSettings() {
+  return {
+    examFilter: document.getElementById('ag-exam').value,
+    mode: document.getElementById('ag-mode').value, // 'latest' | 'best'
+    topK: parseInt(document.getElementById('ag-topk').value, 10) || 3,
+    minMembers: Math.max(1, parseInt(document.getElementById('ag-min').value, 10) || 3),
+  };
+}
+function fillAgExamFilter() {
+  const sel = document.getElementById('ag-exam');
+  const current = sel.value;
+  const keys = new Map(); // examKey → nhãn hiển thị
+  for (const r of cache.results) {
+    const k = agExamKey(r);
+    if (!keys.has(k)) keys.set(k, r.examTitle || r.category || k);
+  }
+  // Đề ngẫu nhiên chính thức luôn có mặt trong bộ lọc (kể cả khi chưa có bài nộp).
+  const randomExam = cache.exams.find((e) => e.isRandom);
+  const opts = [];
+  if (randomExam && !keys.has(randomExam.id)) opts.push([randomExam.id, randomExam.title]);
+  for (const [k, label] of keys) opts.push([k, label]);
+  sel.innerHTML = '<option value="">Tất cả bài thi</option>' +
+    opts.map(([k, label]) => `<option value="${esc(k)}">${esc(label)}</option>`).join('');
+  if (current === '' || [...keys.keys()].includes(current)) sel.value = current;
+}
+
+/** Danh sách cá nhân: 1 dòng/thí sinh theo chế độ tính (mới nhất hoặc điểm cao nhất), đã xếp hạng. */
+function computeIndividuals(settings) {
+  const byCccd = new Map();
+  for (const r of cache.results) {
+    if (settings.examFilter && agExamKey(r) !== settings.examFilter) continue;
+    if (!byCccd.has(r.cccd)) byCccd.set(r.cccd, []);
+    byCccd.get(r.cccd).push(r);
+  }
+  const list = [];
+  for (const [cccd, attempts] of byCccd) {
+    attempts.sort((a, b) => String(b.submittedAt || '').localeCompare(String(a.submittedAt || '')));
+    let chosen = attempts[0]; // mới nhất
+    if (settings.mode === 'best') {
+      for (const a of attempts) if ((Number(a.score) || 0) > (Number(chosen.score) || 0)) chosen = a;
+    }
+    list.push({
+      cccd,
+      result: chosen,
+      attempts: attempts.length,
+      user: cache.users.find((u) => u.cccd === cccd) || null,
+    });
+  }
+  list.sort((a, b) => {
+    const s = (Number(b.result.score) || 0) - (Number(a.result.score) || 0);
+    if (s !== 0) return s;
+    const d = (Number(a.result.durationSeconds) || 0) - (Number(b.result.durationSeconds) || 0);
+    if (d !== 0) return d;
+    return String(a.result.submittedAt || '').localeCompare(String(b.result.submittedAt || ''));
+  });
+  list.forEach((x, i) => { x.rank = i + 1; });
+  return list;
+}
+
+/** Xếp hạng đội theo đơn vị + công thức điểm đội Top-k. */
+function computeTeams(individuals, settings) {
+  const teams = new Map();
+  const ensureTeam = (key, unit) => {
+    if (!teams.has(key)) teams.set(key, { key, unit, members: [], registered: 0 });
+    return teams.get(key);
+  };
+  // Đếm số đăng ký theo đơn vị (mọi tài khoản, kể cả người chưa thi).
+  for (const u of cache.users) {
+    ensureTeam(normalizeUnitKey(u.unit), displayUnit(u.unit)).registered += 1;
+  }
+  for (const it of individuals) {
+    const key = normalizeUnitKey(it.user && it.user.unit);
+    ensureTeam(key, displayUnit(it.user && it.user.unit)).members.push(it);
+  }
+  const list = [...teams.values()];
+  for (const t of list) {
+    t.members.sort((a, b) => (Number(b.result.score) || 0) - (Number(a.result.score) || 0));
+    const k = Math.max(1, Math.min(settings.topK, t.members.length));
+    const top = t.members.slice(0, k);
+    t.topCount = k;
+    t.teamScore = top.length
+      ? Math.round(top.reduce((s, m) => s + (Number(m.result.score) || 0), 0) / k * 100) / 100
+      : 0;
+    t.topScores = top.map((m) => Number(m.result.score) || 0);
+    t.avgAll = t.members.length
+      ? Math.round(t.members.reduce((s, m) => s + (Number(m.result.score) || 0), 0) / t.members.length * 100) / 100
+      : 0;
+    t.avgDuration = t.members.length
+      ? Math.round(t.members.reduce((s, m) => s + (Number(m.result.durationSeconds) || 0), 0) / t.members.length)
+      : 0;
+    t.qualified = t.members.length >= settings.minMembers;
+  }
+  // Đội đủ điều kiện đứng trước; trong mỗi nhóm: điểm đội desc → thành phần điểm
+  // cao nhất từng vị trí desc → tỷ lệ hoàn thành desc → thời gian TB asc.
+  list.sort((a, b) => {
+    if (a.qualified !== b.qualified) return a.qualified ? -1 : 1;
+    const s = b.teamScore - a.teamScore;
+    if (s !== 0) return s;
+    const n = Math.max(a.topScores.length, b.topScores.length);
+    for (let i = 0; i < n; i++) {
+      const d = (b.topScores[i] || 0) - (a.topScores[i] || 0);
+      if (d !== 0) return d;
+    }
+    const ra = a.members.length / Math.max(a.registered, 1);
+    const rb = b.members.length / Math.max(b.registered, 1);
+    if (rb !== ra) return rb - ra;
+    return a.avgDuration - b.avgDuration;
+  });
+  let rank = 0;
+  for (const t of list) {
+    if (t.qualified) { rank += 1; t.rank = rank; } else { t.rank = null; }
+  }
+  return list;
+}
+
+let lastIndividuals = []; // phục vụ tra hạng cá nhân khi in phiếu
+
+function renderAggregate() {
+  fillAgExamFilter();
+  const settings = agSettings();
+  lastIndividuals = computeIndividuals(settings);
+  const teams = computeTeams(lastIndividuals, settings);
+
+  /* ---- Bảng đội ---- */
+  const tBody = document.getElementById('teams-tbody');
+  if (teams.length === 0) {
+    tBody.innerHTML = '<tr><td colspan="7" class="text-center text-slate-400 py-10">Chưa có dữ liệu.</td></tr>';
+  } else {
+    tBody.innerHTML = teams.map((t) => `
+      <tr class="hover:bg-slate-50/70 ${t.rank === 1 ? 'bg-amber-50/60' : ''}">
+        <td class="px-4 py-3.5 font-extrabold text-slate-700">${t.rank ? '#' + t.rank : '—'}</td>
+        <td class="px-4 py-3.5 font-semibold text-slate-800">${esc(t.unit)}
+          ${t.qualified ? '' : `<div class="text-[11px] text-amber-600">Chưa đủ điều kiện xét giải (cần tối thiểu ${settings.minMembers} bài thi)</div>`}
+        </td>
+        <td class="px-3 py-3.5 text-center text-slate-600">${t.registered}</td>
+        <td class="px-3 py-3.5 text-center text-slate-600">${t.members.length}</td>
+        <td class="px-4 py-3.5">
+          <span class="font-extrabold text-flag-700 text-base">${t.members.length ? t.teamScore.toFixed(2) : '—'}</span>
+          <div class="text-[11px] text-slate-400">TB Top ${t.topCount}</div>
+        </td>
+        <td class="px-4 py-3.5 text-xs text-slate-500">${t.topScores.map((s, i) => `<span class="inline-block bg-slate-100 rounded px-1.5 py-0.5 mr-1 mb-0.5">#${i + 1}: <b>${s.toFixed(2)}</b></span>`).join('') || '—'}</td>
+        <td class="px-3 py-3.5 text-center text-slate-600">${t.members.length ? t.avgAll.toFixed(2) : '—'}</td>
+      </tr>`).join('');
+  }
+
+  /* ---- Bảng cá nhân ---- */
+  const pBody = document.getElementById('ag-tbody');
+  if (lastIndividuals.length === 0) {
+    pBody.innerHTML = '<tr><td colspan="6" class="text-center text-slate-400 py-10">Chưa có dữ liệu — chưa có bài thi nào thuộc phạm vi đã chọn.</td></tr>';
+  } else {
+    pBody.innerHTML = lastIndividuals.map((it) => {
+      const r = it.result;
+      const u = it.user;
+      return `
+      <tr class="hover:bg-slate-50/70">
+        <td class="px-4 py-3.5 font-extrabold ${it.rank <= 3 ? 'text-flag-700' : 'text-slate-500'}">${it.rank}</td>
+        <td class="px-4 py-3.5 font-mono font-semibold text-slate-800">${esc(r.cccd)}
+          <div class="text-[11px] text-slate-400 font-sans">${esc(u ? [u.position, u.unit].filter(Boolean).join(' · ') : 'Tài khoản đã xóa')}</div>
+          ${it.attempts > 1 ? `<div class="text-[11px] text-amber-600 font-sans">Đã thi ${it.attempts} lần — tính theo ${settings.mode === 'best' ? 'điểm cao nhất' : 'bài mới nhất'}</div>` : ''}
+        </td>
+        <td class="px-4 py-3.5 text-slate-600">${esc(displayUnit(u && u.unit))}</td>
+        <td class="px-4 py-3.5">
+          <span class="font-extrabold ${Number(r.score) >= 5 ? 'text-emerald-600' : 'text-red-500'} text-base">${Number(r.score).toFixed(2)}</span>
+          <div class="text-[11px] text-slate-400">${r.correct}/${r.total} câu</div>
+          ${r.note ? `<div class="text-[11px] text-amber-600 mt-0.5">Ghi chú: ${esc(r.note)}</div>` : ''}
+        </td>
+        <td class="px-4 py-3.5 text-xs text-slate-500">
+          <div>${fmtDuration(r.durationSeconds)}</div>
+          <div>Nộp: ${fmtDateTime(r.submittedAt)}</div>
+        </td>
+        <td class="px-4 py-3.5 text-right whitespace-nowrap">
+          <button onclick="openPrintPhieu('${esc(r.id)}')" class="text-flag-600 hover:text-flag-800 font-semibold text-xs px-2 py-1.5">🖨 In phiếu</button>
+        </td>
+      </tr>`;
+    }).join('');
+  }
+}
+document.getElementById('ag-exam').addEventListener('change', renderAggregate);
+document.getElementById('ag-mode').addEventListener('change', renderAggregate);
+document.getElementById('ag-topk').addEventListener('change', renderAggregate);
+document.getElementById('ag-min').addEventListener('input', renderAggregate);
+
+/* ---- Xuất CSV (dấu ; + BOM để mở thẳng bằng Excel tiếng Việt) ---- */
+function csvCell(v) {
+  const s = String(v === undefined || v === null ? '' : v);
+  return /[";\n]/.test(s) ? '"' + s.replaceAll('"', '""') + '"' : s;
+}
+function downloadCsv(filename, rows) {
+  const text = '\uFEFF' + rows.map((r) => r.map(csvCell).join(';')).join('\r\n');
+  const blob = new Blob([text], { type: 'text/csv;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 400);
+}
+function exportIndividualsCsv() {
+  const settings = agSettings();
+  const individuals = computeIndividuals(settings);
+  const rows = [
+    ['Hạng', 'CCCD', 'Chức vụ', 'Đơn vị công tác', 'Bài thi', 'Điểm', 'Số câu đúng', 'Tổng câu', 'Thời gian làm bài (giây)', 'Thời điểm nộp', 'Số lần thi', 'Ghi chú'],
+  ];
+  for (const it of individuals) {
+    const r = it.result;
+    rows.push([
+      it.rank,
+      r.cccd,
+      it.user ? (it.user.position || '') : '',
+      displayUnit(it.user && it.user.unit),
+      r.examTitle || r.category || '',
+      Number(r.score).toFixed(2),
+      r.correct,
+      r.total,
+      r.durationSeconds,
+      fmtDateTime(r.submittedAt),
+      it.attempts,
+      r.note || '',
+    ]);
+  }
+  downloadCsv(`bang-diem-ca-nhan-${Date.now()}.csv`, rows);
+}
+function exportTeamsCsv() {
+  const settings = agSettings();
+  const teams = computeTeams(computeIndividuals(settings), settings);
+  const rows = [
+    ['Hạng', 'Đơn vị công tác', 'Số đăng ký', 'Số đã thi', `Điểm đội (TB Top ${settings.topK})`, 'Thành phần điểm (Top)', 'Điểm TB tất cả', 'Điều kiện xét giải'],
+  ];
+  for (const t of teams) {
+    rows.push([
+      t.rank || '',
+      t.unit,
+      t.registered,
+      t.members.length,
+      t.members.length ? t.teamScore.toFixed(2) : '',
+      t.topScores.map((s) => s.toFixed(2)).join(', '),
+      t.members.length ? t.avgAll.toFixed(2) : '',
+      t.qualified ? 'Đạt' : `Chưa đạt (cần tối thiểu ${settings.minMembers})`,
+    ]);
+  }
+  downloadCsv(`bang-xep-hang-doi-${Date.now()}.csv`, rows);
+}
+
+/* ---- In phiếu kết quả từng thí sinh ---- */
+function optionLetter(i) {
+  return Number.isInteger(i) ? String.fromCharCode(65 + i) : '—';
+}
+function individualRankOf(resultId) {
+  const it = lastIndividuals.find((x) => x.result.id === resultId);
+  return it ? it.rank : null;
+}
+async function openPrintPhieu(resultId) {
+  try {
+    const data = await api(`/admin/results/${resultId}/detail`);
+    const html = buildPhieuHtml(data);
+    document.getElementById('print-preview').innerHTML = html;
+    document.getElementById('print-area').innerHTML = html;
+    openModal('modal-print');
+  } catch (err) {
+    toast(err.message, 'error');
+  }
+}
+function buildPhieuHtml(data) {
+  const r = data.result;
+  const user = cache.users.find((u) => u.cccd === r.cccd) || {};
+  const rank = individualRankOf(r.id);
+  const rows = data.questions.map((q, idx) => {
+    const has = Object.prototype.hasOwnProperty.call(data.answers, q.id);
+    const choice = has ? data.answers[q.id] : null;
+    const ok = Number.isInteger(choice) && choice === q.correctIndex;
+    const chosen = Number.isInteger(choice) ? `${optionLetter(choice)}. ${q.options[choice] || ''}` : '(không trả lời)';
+    const right = `${optionLetter(q.correctIndex)}. ${q.options[q.correctIndex] || ''}`;
+    return `
+      <tr>
+        <td style="text-align:center">${idx + 1}</td>
+        <td>${esc(q.text)}</td>
+        <td>${esc(chosen)}</td>
+        <td>${esc(right)}</td>
+        <td style="text-align:center;font-weight:700;color:${ok ? '#047857' : '#b91c1c'}">${ok ? 'Đúng' : 'Sai'}</td>
+      </tr>`;
+  }).join('');
+  return `
+    <div style="text-align:center">
+      <div style="font-weight:700;letter-spacing:.4px">${esc(ORG_LINE)}</div>
+      <div style="font-size:11px">---------------- o0o ----------------</div>
+      <h2 style="font-size:18px;font-weight:800;margin:8px 0 2px">PHIẾU KẾT QUẢ THI TRẮC NGHIỆM</h2>
+      <div style="font-size:12px">${esc(CONTEST_LINE)}</div>
+      <div style="font-size:12px;margin-top:3px">Bài thi: <b>${esc(r.examTitle)}</b></div>
+    </div>
+    <table class="pv-table" style="margin-top:10px">
+      <tr><th style="width:20%">Số CCCD</th><td style="width:30%">${esc(r.cccd)}</td><th style="width:20%">Hạng cá nhân</th><td>${rank ? '#' + rank : '—'}</td></tr>
+      <tr><th>Chức vụ</th><td>${esc(user.position || '—')}</td><th>Đơn vị công tác</th><td>${esc(displayUnit(user.unit))}</td></tr>
+      <tr><th>Email</th><td>${esc(user.email || '—')}</td><th>Số lần thi</th><td>${r.attempts}</td></tr>
+      <tr><th><b>ĐIỂM THI</b></th><td style="font-size:16px;font-weight:800;color:#b00d28">${Number(r.score).toFixed(2)} / 10</td><th>Số câu đúng</th><td><b>${r.correct}</b> / ${r.total}</td></tr>
+      <tr><th>Thời gian làm bài</th><td>${fmtDuration(r.durationSeconds)}</td><th>Thời điểm nộp bài</th><td>${fmtDateTime(r.submittedAt)}</td></tr>
+    </table>
+    ${r.note ? `<p style="margin-top:8px"><b>Ghi chú của Ban Tổ chức:</b> ${esc(r.note)}</p>` : ''}
+    <p style="margin-top:12px;font-weight:700">CHI TIẾT BÀI LÀM (${data.questions.length} câu):</p>
+    <table class="pv-table">
+      <thead>
+        <tr><th style="width:6%">Câu</th><th style="width:42%">Nội dung câu hỏi</th><th style="width:19%">Đáp án đã chọn</th><th style="width:22%">Đáp án đúng</th><th style="width:11%">Kết quả</th></tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>
+    <table style="width:100%;margin-top:22px;font-size:12px">
+      <tr>
+        <td style="text-align:center;width:50%">Người lập bảng<br><br><br>_____________________</td>
+        <td style="text-align:center;width:50%">Đại diện Ban Tổ chức<br><br><br>_____________________</td>
+      </tr>
+    </table>
+    <p style="margin-top:12px;font-size:10px;color:#555">Phiếu in từ hệ thống thi trực tuyến OES lúc ${new Date().toLocaleString('vi-VN')}${r.isRandom ? ' · Bộ đề riêng 30 câu được trộn từ ngân hàng 150 câu (Bộ đề số 6 - Luật An ninh mạng 2026)' : ''}.</p>`;
 }
 
 /* ================================ XÓA CHUNG ================================ */
