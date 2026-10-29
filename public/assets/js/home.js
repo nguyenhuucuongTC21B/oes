@@ -17,7 +17,7 @@
 /* ------------------------------ Đếm ngược hạn thi ------------------------------ */
 (function countdown() {
   // Hạn cuối nhận bài dự thi — Ban Tổ chức thay đổi tại đây.
-  const DEADLINE = new Date('2026-12-31T23:59:59+07:00').getTime();
+  const DEADLINE = new Date('2026-11-04T23:59:59+07:00').getTime();
   const els = {
     d: document.getElementById('cd-d'),
     h: document.getElementById('cd-h'),
