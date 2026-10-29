@@ -58,7 +58,8 @@ async function refreshAll() {
 /* ================================ TỔNG QUAN ================================ */
 function renderOverview() {
   document.getElementById('ov-users').textContent = cache.users.length.toLocaleString('vi-VN');
-  document.getElementById('ov-exams').textContent = cache.exams.length.toLocaleString('vi-VN');
+  // R10a: không đếm đề ảo random30 (isRandom) vào số đề thi thực.
+  document.getElementById('ov-exams').textContent = cache.exams.filter((e) => !e.isRandom).length.toLocaleString('vi-VN');
   document.getElementById('ov-results').textContent = cache.results.length.toLocaleString('vi-VN');
   const avg = cache.results.length
     ? Math.round((cache.results.reduce((s, r) => s + (Number(r.score) || 0), 0) / cache.results.length) * 100) / 100
@@ -217,7 +218,33 @@ function examScheduleChip(e) {
 
 function renderExams() {
   const host = document.getElementById('exams-list');
-  if (cache.exams.length === 0) {
+  // R10a: đề ảo "random30" (isRandom) render THẺ RIÊNG ở đầu danh sách —
+  // hết cảnh "bộ đề ngẫu nhiên biến mất" trong Ban quản trị. Thẻ chỉ hiển thị
+  // thông tin pool, không có nút Sửa/Xóa vì đề này do hệ thống sinh theo CCCD.
+  const randomExam = cache.exams.find((e) => e.isRandom);
+  const realExams = cache.exams.filter((e) => !e.isRandom);
+  const randomCardHtml = randomExam ? `
+    <article class="md:col-span-2 xl:col-span-3 bg-gradient-to-br from-flag-700 via-flag-600 to-flag-800 text-white rounded-2xl shadow-soft p-5 sm:p-6 star-pattern">
+      <div class="flex flex-wrap items-start justify-between gap-3">
+        <div class="min-w-0">
+          <span class="inline-block bg-gold-400 text-flag-900 text-[11px] font-bold uppercase tracking-wider px-2 py-1 rounded-full">★ Đề riêng mỗi thí sinh — đề ảo tự sinh</span>
+          <h3 class="font-bold text-lg mt-2.5 leading-snug">${esc(randomExam.title)}</h3>
+          <p class="text-xs text-white/85 mt-1.5 leading-relaxed">${esc(randomExam.description || '')}</p>
+        </div>
+        <div class="text-right text-xs text-white/75 leading-relaxed shrink-0">
+          <div>📝 ${randomExam.questionCount} câu / lượt</div>
+          <div>⏱ ${randomExam.durationMinutes} phút</div>
+          <div>⭐ mỗi câu ${randomExam.pointsPerQuestion || 2} điểm (Thang 60)</div>
+        </div>
+      </div>
+      <div class="mt-3 flex flex-wrap items-center gap-2 text-xs">
+        <span class="bg-white/10 border border-white/25 rounded-lg px-2.5 py-1.5">🎯 Pool: <b>${randomExam.poolQuestions || 0} câu</b> — ${esc(randomExam.poolSourceLabel || '')}</span>
+        ${randomExam.poolSourceId
+          ? `<button onclick="viewExam('${esc(randomExam.poolSourceId)}')" class="bg-white/10 hover:bg-white/20 border border-white/25 rounded-lg px-2.5 py-1.5 font-semibold transition">Xem đề nguồn (${esc(randomExam.poolSourceId)})</button>`
+          : `<span class="bg-amber-100 border border-amber-300 text-amber-900 rounded-lg px-2.5 py-1.5 leading-relaxed">⚠ Chưa có Bộ đề số 6 (exam_c6) — đang trộn toàn bộ ngân hàng. Hãy nạp examsVercel_6de.json vào examsVercel.json trên Drive.</span>`}
+      </div>
+    </article>` : '';
+  if (realExams.length === 0 && !randomExam) {
     host.innerHTML = `
       <div class="md:col-span-2 xl:col-span-3 bg-white rounded-2xl border border-dashed border-slate-300 p-12 text-center">
         <div class="text-4xl">📝</div>
@@ -226,7 +253,7 @@ function renderExams() {
       </div>`;
     return;
   }
-  host.innerHTML = cache.exams.map((e) => `
+  host.innerHTML = randomCardHtml + realExams.map((e) => `
     <article class="bg-white rounded-2xl border border-slate-200 p-5 flex flex-col">
       <div class="flex items-start justify-between gap-2">
         <span class="bg-flag-50 text-flag-700 text-[11px] font-bold uppercase tracking-wider px-2 py-1 rounded">${esc(e.category)}</span>

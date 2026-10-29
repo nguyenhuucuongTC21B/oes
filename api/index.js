@@ -9,16 +9,24 @@
  *  Chi cac npm package trong package.json (express, googleapis)
  *  duoc nap tu node_modules - Vercel tu cai theo package.json.
  *
- *  R10 (2026-10): dropdown 25 don vi cong tac + Admin mac dinh CCCD
- *  048085006405 + 3 thang diem 10/100/60 (ca nhan & tap the) + diem
- *  TAP THE theo don vi + Admin chinh sua giao dien & thoi gian nhan
- *  bai du thi (site config luu trong usersVercel.json, ban ghi dac biet
- *  "__siteConfig__" — KHONG tao file moi tren Drive) + xem bai lam
- *  hoan chinh tung thi sinh + in phieu ket qua.
+ *  R10a (2026-10): VAN SU CO MAT DE NGAU NHIEN —
+ *   (1) cam tu nap bo de mau khi boot KHONG doc duoc Drive (nguyen nhan lam
+ *       danh sach de thi trong + tron de mau vao ngan hang that);
+ *   (2) giu fileId khi tim thay file nhung download loi (chi update+merge,
+ *       khong bao gio tao file thu hai cung ten); 
+ *   (3) chan moi thao tac GHI khi instance chua doc duoc Drive (503) — nạp
+ *       de mau, sua/xoa de, sua user, luu site config, dang ky;
+ *   (4) de ao random30 quay lai DAU danh sach GET /exams kem trang thai
+ *       pool (canh bao khi chua nap exam_c6) — ca quiz.html lẫn Ban quan tri
+ *       đeu thấy "Đề thi ngẫu nhiên 30 câu".
+ *  Ke tu R10: dropdown 25 don vi + Admin mac dinh 048085006405 + 3 thang
+ *  diem 10/100/60 (ca nhan & tap the) + Admin chinh sua giao dien & thoi
+ *  gian nhan bai (site config trong ban ghi "__siteConfig__" cua
+ *  usersVercel.json — KHONG tao file moi tren Drive) + in phieu ket qua.
  *
  *  CACH DUNG: thay TOAN BO noi dung api/index.js tren GitHub bang
  *  noi dung file nay -> Commit -> Vercel tu build -> kiem tra
- *  /api/health phai tra "build":"OES-VERCEL-R10".
+ *  /api/health phai tra "build":"OES-VERCEL-R10a".
  *
  *  (Ban bundle sinh tu dong boi scripts/build_single.js -
  *   KHONG sua tay file nay; sua src/ roi build lai.)
@@ -1523,6 +1531,15 @@ var require_dataStore = __commonJS({
     }
     async function seedSampleExamsIfEmpty() {
       if (store.exams.data.length > 0) return;
+      if (driveClient.isDriveMode()) {
+        const s = store.exams;
+        if (!s.bootLoadedOk || s.fileId) {
+          console.warn(
+            `[store] exams trống trong RAM nhưng KHÔNG nạp bộ đề mẫu (bootLoadedOk=${s.bootLoadedOk}, fileId=${s.fileId ? "có" : "null"}) — cần đọc được Drive thành công và xác nhận file exams chưa tồn tại rồi mới nạp mẫu. Admin vẫn có thể bấm "Nạp bộ đề mẫu" thủ công khi Drive đã ổn định.`
+          );
+          return;
+        }
+      }
       try {
         const { buildSampleExams } = require_sampleExams();
         const samples = buildSampleExams();
@@ -1535,25 +1552,47 @@ var require_dataStore = __commonJS({
         console.warn(`[store] Khong nap duoc bo de mau: ${err.message}`);
       }
     }
+    function isHealthy(key) {
+      assertKey(key);
+      if (!driveClient.isDriveMode()) return true;
+      return store[key].bootLoadedOk === true;
+    }
     async function initOne(key) {
       const fname = fileNameOf(key);
       if (driveClient.isDriveMode()) {
+        let foundFileId = null;
         try {
-          const fileId = await driveClient.findFileByName(fname);
-          if (fileId) {
-            const data = await driveClient.downloadFile(fileId);
-            store[key].data = Array.isArray(data) ? data : [];
-            store[key].fileId = fileId;
+          foundFileId = await driveClient.findFileByName(fname);
+          if (foundFileId) {
+            try {
+              const data = await driveClient.downloadFile(foundFileId);
+              store[key].data = Array.isArray(data) ? data : [];
+              store[key].fileId = foundFileId;
+              store[key].baseline = new Map(store[key].data.map((r) => [idOf(key, r), JSON.stringify(r)]));
+              store[key].loadedAt = Date.now();
+              store[key].bootLoadedOk = true;
+              await mirrorLocal(key);
+              console.log(`[store] Tai ${fname} tu Google Drive: ${store[key].data.length} ban ghi`);
+              return;
+            } catch (dlErr) {
+              store[key].bootLoadedOk = false;
+              store[key].fileId = foundFileId;
+              const tipDl = adviceForError(dlErr);
+              store[key].lastSyncError = `Tìm thấy ${fname} trên Drive nhưng không đọc được nội dung: ${dlErr.message}${tipDl ? ` → ${tipDl}` : ""}`;
+              console.error(
+                `[store] ${fname} co tren Drive (id=${foundFileId}) nhung khong doc duoc (${dlErr.message}) — giu fileId, cho thu lai.`
+              );
+            }
           } else {
             store[key].data = [];
             store[key].fileId = null;
+            store[key].baseline = /* @__PURE__ */ new Map();
+            store[key].loadedAt = Date.now();
+            store[key].bootLoadedOk = true;
+            await mirrorLocal(key);
+            console.log(`[store] ${fname} chua co tren Google Drive — khoi tao rong (se tao file khi ghi dau tien).`);
+            return;
           }
-          store[key].baseline = new Map(store[key].data.map((r) => [idOf(key, r), JSON.stringify(r)]));
-          store[key].loadedAt = Date.now();
-          store[key].bootLoadedOk = true;
-          await mirrorLocal(key);
-          console.log(`[store] Tai ${fname} tu Google Drive: ${store[key].data.length} ban ghi`);
-          return;
         } catch (err) {
           store[key].bootLoadedOk = false;
           const tip = adviceForError(err);
@@ -1793,6 +1832,8 @@ var require_dataStore = __commonJS({
       flushOnShutdown,
       getSyncInfo,
       reloadFromDrive,
+      isHealthy,
+      // R10a: chặn thao tác ghi khi instance chưa đọc được Drive
       fileNameOf,
       FILES
     };
@@ -2286,7 +2327,7 @@ var require_public_routes = __commonJS({
     var siteConfig = require_siteConfig();
     var driveClient = require_driveClient();
     var router = express.Router();
-    var BUILD_TAG = "OES-VERCEL-R10";
+    var BUILD_TAG = "OES-VERCEL-R10a";
     router.get("/stats", (req, res) => {
       const results = dataStore.get("results");
       const avgScore = results.length > 0 ? Math.round(results.reduce((s, r) => s + (Number(r.score) || 0), 0) / results.length * 100) / 100 : 0;
@@ -2611,6 +2652,12 @@ var require_auth_routes = __commonJS({
     }
     router.post("/register", async (req, res, next) => {
       try {
+        if (!dataStore.isHealthy("users")) {
+          return res.status(503).json({
+            message: "Hệ thống đang tạm không đọc được kho dữ liệu từ Google Drive, nên chưa thể nhận đăng ký lúc này. Vui lòng thử lại sau ít phút (thường chỉ là lỗi mạng/quota tạm thời).",
+            storeUnhealthy: true
+          });
+        }
         const check = validateRegister(req.body);
         if (!check.ok) return res.status(400).json({ message: check.message });
         const data = check.data;
@@ -2981,6 +3028,27 @@ var require_exam_routes = __commonJS({
       }
     });
     router.get("/exams", (req, res) => {
+      const poolInfo = buildQuestionPool(dataStore);
+      const virtualRandom = poolInfo.questions.length > 0 ? {
+        id: RANDOM_EXAM.id,
+        title: RANDOM_EXAM.title,
+        description: `Đề RIÊNG cho từng thí sinh: 30 câu trộn từ ${poolInfo.sourceLabel}. Mỗi thí sinh nhận một bộ đề tất định gắn với CCCD — vào lại vẫn đúng bộ đề cũ.`,
+        category: RANDOM_EXAM.category,
+        durationMinutes: RANDOM_EXAM.durationMinutes,
+        questionCount: RANDOM_EXAM.questionCount,
+        pointsPerQuestion: RANDOM_EXAM.pointsPerQuestion,
+        isRandom: true,
+        poolQuestions: poolInfo.questions.length,
+        poolSourceId: poolInfo.sourceId,
+        // 'exam_c6' hoặc null (fallback toàn ngân hàng)
+        poolSourceLabel: poolInfo.sourceLabel,
+        // Khung giờ nhận bài dự thi của TOÀN HỆ THỐNG áp cho lượt mới.
+        openAt: siteConfig.getConfig().intakeOpenAt || null,
+        closeAt: siteConfig.getConfig().intakeCloseAt || null,
+        windowStatus: siteConfig.intakeStatus().status,
+        createdAt: (/* @__PURE__ */ new Date()).toISOString()
+        // luôn đứng đầu danh sách
+      } : null;
       const exams = dataStore.get("exams").map((e) => ({
         id: e.id,
         title: e.title,
@@ -2994,7 +3062,7 @@ var require_exam_routes = __commonJS({
         closeAt: e.closeAt || null,
         windowStatus: statusOf(e).status
       })).sort((a, b) => a.createdAt < b.createdAt ? 1 : -1);
-      res.json({ exams });
+      res.json({ exams: virtualRandom ? [virtualRandom, ...exams] : exams });
     });
     router.get("/exams/:id", (req, res) => {
       const exam = dataStore.get("exams").find((e) => e.id === req.params.id);
@@ -3152,12 +3220,23 @@ var require_admin_routes = __commonJS({
     function syncSuffix(sync) {
       return sync && sync.synced ? "" : " ⚠ Dữ liệu CHƯA đồng bộ lên Google Drive — hệ thống sẽ tự thử lại mỗi 30 giây.";
     }
+    function guardWriteStore(key, res) {
+      if (dataStore.isHealthy(key)) return false;
+      console.warn(`[admin] CHAN ghi '${key}' — instance chua doc duoc Drive.`);
+      res.status(503).json({
+        message: 'Hệ thống CHƯA đọc được dữ liệu từ Google Drive (mạng/quota/token tạm lỗi), nên tạm CHẶN các thao tác ghi để bảo vệ dữ liệu thật. Bấm "Kiểm tra Drive ngay" để chẩn đoán; khi Drive ổn định, tải lại trang và thực hiện lại thao tác.',
+        synced: false,
+        storeUnhealthy: true
+      });
+      return true;
+    }
     router.get("/users", (req, res) => {
       const users = dataStore.get("users").filter(siteConfig.isRealUser).map(({ passwordHash, ...rest }) => rest);
       res.json({ users });
     });
     router.put("/users/:cccd", async (req, res, next) => {
       try {
+        if (guardWriteStore("users", res)) return;
         if (!siteConfig.isRealUser({ cccd: req.params.cccd })) {
           return res.status(400).json({ message: "Không thể sửa bản ghi hệ thống." });
         }
@@ -3209,6 +3288,7 @@ var require_admin_routes = __commonJS({
     });
     router.delete("/users/:cccd", async (req, res, next) => {
       try {
+        if (guardWriteStore("users", res)) return;
         if (req.params.cccd === req.user.cccd) {
           return res.status(400).json({ message: "Không thể tự xóa tài khoản đang đăng nhập." });
         }
@@ -3227,6 +3307,7 @@ var require_admin_routes = __commonJS({
     });
     router.post("/exams", async (req, res, next) => {
       try {
+        if (guardWriteStore("exams", res)) return;
         const check = validateExamPayload(req.body);
         if (!check.ok) return res.status(400).json({ message: check.message });
         const twoMinutesAgo = Date.now() - 2 * 60 * 1e3;
@@ -3263,6 +3344,7 @@ var require_admin_routes = __commonJS({
     });
     router.put("/exams/:id", async (req, res, next) => {
       try {
+        if (guardWriteStore("exams", res)) return;
         const exam = dataStore.get("exams").find((e) => e.id === req.params.id);
         if (!exam) return res.status(404).json({ message: "Không tìm thấy đề thi." });
         const check = validateExamPayload(req.body);
@@ -3289,6 +3371,7 @@ var require_admin_routes = __commonJS({
     });
     router.delete("/exams/:id", async (req, res, next) => {
       try {
+        if (guardWriteStore("exams", res)) return;
         const exams = dataStore.get("exams");
         const idx = exams.findIndex((e) => e.id === req.params.id);
         if (idx === -1) return res.status(404).json({ message: "Không tìm thấy đề thi." });
@@ -3304,6 +3387,7 @@ var require_admin_routes = __commonJS({
     });
     router.post("/seed-sample-exams", async (req, res, next) => {
       try {
+        if (guardWriteStore("exams", res)) return;
         const missing = missingSampleExams(dataStore.get("exams"));
         if (missing.length === 0) {
           return res.json({
@@ -3362,6 +3446,7 @@ var require_admin_routes = __commonJS({
     });
     router.put("/site-config", async (req, res, next) => {
       try {
+        if (guardWriteStore("users", res)) return;
         const b = req.body || {};
         const patch = {};
         const { DEFAULTS } = siteConfig;
@@ -3408,6 +3493,7 @@ var require_admin_routes = __commonJS({
     });
     router.put("/results/:id", async (req, res, next) => {
       try {
+        if (guardWriteStore("results", res)) return;
         const result = dataStore.get("results").find((r) => r.id === req.params.id);
         if (!result) return res.status(404).json({ message: "Không tìm thấy kết quả bài làm." });
         const b = req.body || {};

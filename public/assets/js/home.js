@@ -60,31 +60,41 @@ let deadlineTimer = null;
     if (track) track.innerHTML = `<span class="px-4">${cfg.marquee.repeat(2)}</span><span class="px-4">${cfg.marquee.repeat(2)}</span>`;
   }
   // Nhãn + tiêu đề + mô tả hero (Admin nhập — cho phép HTML).
-  if (cfg.heroBadge) document.getElementById('hero-badge').innerHTML = cfg.heroBadge;
-  if (cfg.heroTitle) document.getElementById('hero-title').innerHTML = cfg.heroTitle;
-  if (cfg.heroSubtitle) document.getElementById('hero-subtitle').innerHTML = cfg.heroSubtitle;
+  // R10a: luôn kiểm tra phần tử tồn tại trước khi gán — thiếu slot (trang tùy
+  // biến) chỉ bỏ qua slot đó, không làm đổ toàn bộ applySiteConfig.
+  const slotHtml = (id, html) => {
+    const el = document.getElementById(id);
+    if (el) el.innerHTML = html;
+  };
+  if (cfg.heroBadge) slotHtml('hero-badge', cfg.heroBadge);
+  if (cfg.heroTitle) slotHtml('hero-title', cfg.heroTitle);
+  if (cfg.heroSubtitle) slotHtml('hero-subtitle', cfg.heroSubtitle);
   // Ảnh bìa hero.
   if (cfg.bannerUrl) {
     const b = document.getElementById('hero-banner');
     const o = document.getElementById('hero-banner-overlay');
-    b.style.backgroundImage = `url('${cfg.bannerUrl}')`;
-    b.classList.remove('hidden');
-    o.classList.remove('hidden');
+    if (b) {
+      b.style.backgroundImage = `url('${cfg.bannerUrl}')`;
+      b.classList.remove('hidden');
+    }
+    if (o) o.classList.remove('hidden');
   }
-  // Nội dung các khối div trang chủ.
-  if (cfg.introHtml) document.getElementById('intro-body').innerHTML = cfg.introHtml;
-  if (cfg.principleHtml) document.getElementById('principle-body').innerHTML = cfg.principleHtml;
-  if (cfg.rulesHtml) document.getElementById('rules-note').innerHTML = cfg.rulesHtml;
+  // Nội dung các khối div trang chủ (R10a: thiếu slot chỉ bỏ qua, không đổ trang).
+  if (cfg.introHtml) slotHtml('intro-body', cfg.introHtml);
+  if (cfg.principleHtml) slotHtml('principle-body', cfg.principleHtml);
+  if (cfg.rulesHtml) slotHtml('rules-note', cfg.rulesHtml);
   // Dòng mô tả khung giờ nhận bài + mốc đếm ngược.
   const intakeNote = document.getElementById('intake-note');
-  if (cfg.intakeOpenAt && cfg.intakeCloseAt) {
-    intakeNote.textContent = `Nhận bài từ ${fmtVn(cfg.intakeOpenAt)} đến ${fmtVn(cfg.intakeCloseAt)} (giờ VN)`;
-  } else if (cfg.intakeCloseAt) {
-    intakeNote.textContent = `Nhận bài đến hết ${fmtVn(cfg.intakeCloseAt)} (giờ VN)`;
-  } else if (cfg.deadlineIso) {
-    const d = new Date(cfg.deadlineIso);
-    if (!Number.isNaN(d.getTime())) {
-      intakeNote.textContent = `Đến hết ngày ${d.toLocaleDateString('vi-VN')} (giờ VN)`;
+  if (intakeNote) {
+    if (cfg.intakeOpenAt && cfg.intakeCloseAt) {
+      intakeNote.textContent = `Nhận bài từ ${fmtVn(cfg.intakeOpenAt)} đến ${fmtVn(cfg.intakeCloseAt)} (giờ VN)`;
+    } else if (cfg.intakeCloseAt) {
+      intakeNote.textContent = `Nhận bài đến hết ${fmtVn(cfg.intakeCloseAt)} (giờ VN)`;
+    } else if (cfg.deadlineIso) {
+      const d = new Date(cfg.deadlineIso);
+      if (!Number.isNaN(d.getTime())) {
+        intakeNote.textContent = `Đến hết ngày ${d.toLocaleDateString('vi-VN')} (giờ VN)`;
+      }
     }
   }
   if (cfg.deadlineIso && typeof window.__oesSetDeadline === 'function') {

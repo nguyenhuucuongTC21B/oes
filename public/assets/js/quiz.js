@@ -129,7 +129,9 @@ async function renderExamList() {
         </div>`;
       return;
     }
-    grid.innerHTML = exams.map((e) => `
+    // R10a: đề ảo "random30" (isRandom) render thẻ riêng nổi bật — không còn
+    // hiện tượng "bộ đề ngẫu nhiên biến mất" khỏi danh sách.
+    grid.innerHTML = exams.map((e) => e.isRandom ? randomCardHtml(e) : `
       <article class="bg-white rounded-2xl border border-slate-100 shadow-sm p-6 flex flex-col hover:shadow-soft transition" data-exam-card="${esc(e.id)}">
         <span class="self-start bg-flag-50 text-flag-700 text-[11px] font-bold uppercase tracking-wider px-2 py-1 rounded">${esc(e.category)}</span>
         <h2 class="font-serif font-bold text-lg text-slate-900 mt-3 leading-snug">${esc(e.title)}</h2>
@@ -145,6 +147,42 @@ async function renderExamList() {
   } catch (err) {
     grid.innerHTML = `<div class="col-span-full text-center text-red-500 py-10">${esc(err.message)}</div>`;
   }
+}
+
+/**
+ * R10a — Thẻ đề ngẫu nhiên random30 trong danh sách đề (nổi bật, nền đỏ cờ).
+ * Khi pool đang dùng TOÀN BỘ ngân hàng (chưa nạp exam_c6) hiển thị cảnh báo
+ * để Ban Tổ chức biết cần dán examsVercel_6de.json vào examsVercel.json.
+ */
+function randomCardHtml(e) {
+  const poolWarn = e.poolSourceId
+    ? ''
+    : `<div class="mt-3 rounded-xl bg-amber-100 border border-amber-300 text-amber-900 text-xs leading-relaxed px-3 py-2">
+         ⚠ Chưa tìm thấy Bộ đề số 6 (exam_c6) trong kho — đang trộn từ <b>toàn bộ ngân hàng đề thi</b> (${e.poolQuestions || 0} câu).
+         Ban Tổ chức cần nạp examsVercel_6de.json vào examsVercel.json trên Google Drive để đề trộn đúng 150 câu Luật An ninh mạng 2026.
+       </div>`;
+  return `
+    <article class="col-span-full bg-gradient-to-br from-flag-700 via-flag-600 to-flag-800 text-white rounded-2xl shadow-soft p-6 sm:p-8 star-pattern" data-exam-card="${esc(e.id)}">
+      <div class="flex flex-wrap items-start justify-between gap-3">
+        <div class="min-w-0">
+          <span class="inline-block bg-gold-400 text-flag-900 text-[11px] font-bold uppercase tracking-wider px-3 py-1 rounded-full">★ Đề riêng mỗi thí sinh</span>
+          <h2 class="font-serif font-bold text-xl sm:text-2xl mt-3 leading-snug">${esc(e.title)}</h2>
+        </div>
+        <div class="text-right text-xs text-white/70 leading-relaxed">
+          <div>⭐ mỗi câu ${e.pointsPerQuestion || 2} điểm</div>
+          <div>Thang 10 · Thang 100 · Thang 60</div>
+        </div>
+      </div>
+      <p class="text-sm text-white/85 mt-3 leading-relaxed">${esc(e.description || '')}</p>
+      <div class="mt-4 flex flex-wrap items-center gap-x-6 gap-y-2 text-xs text-white/75">
+        <span>📝 ${e.questionCount} câu / lượt</span>
+        <span>⏱ ${e.durationMinutes} phút</span>
+        <span>🎯 Nguồn đề: ${esc(e.poolSourceLabel || 'ngân hàng đề thi')} (${e.poolQuestions || 0} câu)</span>
+      </div>
+      ${poolWarn}
+      ${windowBadgeHtml(e)}
+      ${windowButtonHtml(e)}
+    </article>`;
 }
 
 /**
