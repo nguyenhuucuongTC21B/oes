@@ -13,7 +13,8 @@ const currentUser = Auth.user();
 document.getElementById('admin-chip').textContent = `Admin: ${maskCccd(currentUser.cccd)}`;
 
 /* Dữ liệu đệm client-side. */
-const cache = { users: [], exams: [], results: [] };
+const cache = { users: [], exams: [], results: [], siteCfg: null, unitsDefault: [], unitsIsDefault: true };
+let siteCfgBusy = false; // Đang lưu cấu hình giao diện — chặn bấm Lưu lặp.
 let rankByScore = false;
 let editingUserCccd = null;
 let editingResultId = null;
@@ -37,6 +38,7 @@ function switchSection(name) {
   if (name === 'exams') renderExams();
   if (name === 'results') renderResults();
   if (name === 'aggregate') renderAggregate();
+  if (name === 'appearance') renderAppearance();
 }
 for (const btn of document.querySelectorAll('.nav-btn')) {
   btn.addEventListener('click', () => switchSection(btn.dataset.section));
@@ -148,6 +150,9 @@ function openUserModal(cccd) {
   document.getElementById('mu-phone').value = u.phone || '';
   document.getElementById('mu-email').value = u.email || '';
   document.getElementById('mu-position').value = u.position || '';
+  // R10: đơn vị là dropdown theo danh sách Ban Tổ chức (đơn vị cũ ngoài danh sách
+  // vẫn hiển thị để giữ nguyên, không bị ép đổi khi sửa thông tin khác).
+  document.getElementById('mu-unit').innerHTML = unitOptionsHtml(u.unit || '');
   document.getElementById('mu-unit').value = u.unit || '';
   document.getElementById('mu-role').value = u.role || 'user';
   document.getElementById('mu-password').value = '';
@@ -1102,6 +1107,142 @@ function buildPhieuHtml(data) {
     <p style="margin-top:12px;font-size:10px;color:#555">Phiếu in từ hệ thống thi trực tuyến OES lúc ${new Date().toLocaleString('vi-VN')}${r.isRandom ? ' · Bộ đề riêng 30 câu được trộn từ ngân hàng 150 câu (Bộ đề số 6 - Luật An ninh mạng 2026)' : ''}.</p>`;
 }
 
+/* ==================== R10: GIAO DIỆN & THỜI GIAN (site-config) ====================
+ * Lưu tại usersVercel.json (bản ghi "__siteConfig__") — không tạo file mới trên Drive.
+ * Trang chủ + trang đăng ký đọc công khai qua GET /api/site-config. */
+
+function unitOptionsHtml(selected) {
+  const list = Array.isArray(cache.siteCfg && cache.siteCfg.units) && cache.siteCfg.units.length
+    ? cache.siteCfg.units
+    : (cache.unitsDefault.length ? cache.unitsDefault : []);
+  let html = '';
+  if (selected && !list.includes(selected)) {
+    // Đơn vị cũ ngoài danh sách (tài khoản đăng ký trước R10) — giữ nguyên, không ép đổi.
+    html += `<option value="${esc(selected)}">※ Giữ nguyên: ${esc(selected)}</option>`;
+  }
+  html += '<option value="">— Chọn đơn vị —</option>' +
+    list.map((u) => `<option value="${esc(u)}"${u === selected ? ' selected' : ''}>${esc(u)}</option>`).join('');
+  return html;
+}
+
+async function loadSiteConfigAdmin() {
+  try {
+    const data = await api('/admin/site-config');
+    cache.siteCfg = data.config || null;
+    cache.unitsDefault = data.unitsDefault || [];
+    cache.unitsIsDefault = data.unitsIsDefault !== false;
+  } catch (err) {
+    toast(err.message, 'error');
+  }
+}
+
+function renderAppearance() {
+  const c = cache.siteCfg;
+  if (!c) return;
+  // 1. Khung giờ nhận bài
+  document.getElementById('cf-openat').value = isoToVnLocal(c.window && c.window.openAt);
+  document.getElementById('cf-closeat').value = isoToVnLocal(c.window && c.window.closeAt);
+  const w = c.window || {};
+  const el = document.getElementById('cf-window-status');
+  if (!w.openAt && !w.closeAt) el.textContent = 'Trạng thái: nhận bài MỌI LÚC (chưa đặt khung giờ).';
+  else {
+    const now = Date.now();
+    const openMs = w.openAt ? Date.parse(w.openAt) : null;
+    const closeMs = w.closeAt ? Date.parse(w.closeAt) : null;
+    if (closeMs && now >= closeMs) el.innerHTML = `Trạng thái: <b class="text-red-600">ĐÃ ĐÓNG</b> từ ${fmtVn(w.closeAt)}.`;
+    else if (openMs && now < openMs) el.innerHTML = `Trạng thái: <b class="text-amber-600">CHƯA MỞ</b> — mở lúc ${fmtVn(w.openAt)}${w.closeAt ? `, đóng ${fmtVn(w.closeAt)}` : ''}.`;
+    else el.innerHTML = `Trạng thái: <b class="text-emerald-600">ĐANG MỞ</b>${w.closeAt ? ` — đóng lúc ${fmtVn(w.closeAt)}` : ''}.`;
+  }
+  // 2. Đề thi chính thức
+  const re = c.randomExam || {};
+  document.getElementById('cf-re-enabled').checked = re.enabled !== false;
+  document.getElementById('cf-re-count').value = re.count || 30;
+  document.getElementById('cf-re-duration').value = re.durationMinutes || 20;
+  // 3. Banner + nội dung
+  document.getElementById('cf-banner').value = c.bannerUrl || '';
+  const pv = document.getElementById('cf-banner-preview');
+  if (c.bannerUrl) { pv.src = c.bannerUrl; pv.classList.remove('hidden'); }
+  else pv.classList.add('hidden');
+  document.getElementById('cf-site-name').value = c.siteName || '';
+  document.getElementById('cf-header-sub').value = c.headerSub || '';
+  document.getElementById('cf-hero-title').value = c.heroTitle || '';
+  document.getElementById('cf-hero-lead').value = c.heroLead || '';
+  document.getElementById('cf-notice').value = c.noticeHtml || '';
+  document.getElementById('cf-intro').value = c.introHtml || '';
+  document.getElementById('cf-footer').value = c.footerText || '';
+  // 4. Danh sách đơn vị (đang hiệu lực)
+  const units = Array.isArray(c.units) && c.units.length ? c.units : cache.unitsDefault;
+  document.getElementById('cf-units').value = units.join('\n');
+  document.getElementById('cf-units-hint').textContent =
+    `Đang hiệu lực ${units.length} đơn vị${cache.unitsIsDefault ? ' (danh sách mặc định — thay đổi ở đây rồi bấm Lưu để dùng danh sách riêng)' : ' (danh sách RIÊNG do Admin đặt)'}.`;
+}
+
+function restoreDefaultUnits() {
+  document.getElementById('cf-units').value = cache.unitsDefault.join('\n');
+  toast('Đã điền danh sách 25 đơn vị mặc định vào ô — nhớ bấm LƯU để áp dụng.', 'info');
+}
+
+async function saveSiteConfig() {
+  if (siteCfgBusy) return;
+  const vnVal = (id) => document.getElementById(id).value.trim();
+  const unitsLines = document.getElementById('cf-units').value.split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
+  // Nếu danh sách gõ vào trùng khớp mặc định → gửi [] để trở về "dùng mặc định".
+  const isDefaultAgain = cache.unitsDefault.length > 0 &&
+    unitsLines.length === cache.unitsDefault.length &&
+    unitsLines.every((u, i) => u === cache.unitsDefault[i]);
+  const body = {
+    bannerUrl: vnVal('cf-banner'),
+    siteName: vnVal('cf-site-name'),
+    headerSub: vnVal('cf-header-sub'),
+    heroTitle: vnVal('cf-hero-title'),
+    heroLead: document.getElementById('cf-hero-lead').value,
+    noticeHtml: document.getElementById('cf-notice').value,
+    introHtml: document.getElementById('cf-intro').value,
+    footerText: document.getElementById('cf-footer').value,
+    window: {
+      openAt: vnLocalToIso(vnVal('cf-openat')) || null,
+      closeAt: vnLocalToIso(vnVal('cf-closeat')) || null,
+    },
+    randomExam: {
+      enabled: document.getElementById('cf-re-enabled').checked,
+      count: parseInt(document.getElementById('cf-re-count').value, 10) || 30,
+      durationMinutes: parseInt(document.getElementById('cf-re-duration').value, 10) || 20,
+    },
+    units: isDefaultAgain ? [] : unitsLines,
+  };
+  siteCfgBusy = true;
+  const btn = document.getElementById('cf-save');
+  btn.disabled = true;
+  btn.textContent = 'Đang lưu...';
+  try {
+    const data = await api('/admin/site-config', { method: 'PUT', body });
+    toast(data.message, data.synced === false ? 'info' : 'success');
+    if (data.synced === false) checkSyncStatus();
+    cache.siteCfg = data.config || cache.siteCfg;
+    cache.unitsIsDefault = !(cache.siteCfg && cache.siteCfg.units && cache.siteCfg.units.length);
+    renderAppearance();
+  } catch (err) {
+    toast(err.message, 'error');
+  } finally {
+    siteCfgBusy = false;
+    btn.disabled = false;
+    btn.textContent = '💾 LƯU TẤT CẢ CẤU HÌNH';
+  }
+}
+
+/* Xem trước banner ngay khi Admin dán URL. */
+document.addEventListener('DOMContentLoaded', () => {
+  const bannerInput = document.getElementById('cf-banner');
+  if (bannerInput) {
+    bannerInput.addEventListener('change', () => {
+      const pv = document.getElementById('cf-banner-preview');
+      const v = bannerInput.value.trim();
+      if (v) { pv.src = v; pv.classList.remove('hidden'); }
+      else pv.classList.add('hidden');
+    });
+  }
+});
+
 /* ================================ XÓA CHUNG ================================ */
 function askDelete(detail, run) {
   deleteAction = run;
@@ -1121,7 +1262,7 @@ document.getElementById('btn-confirm-delete').addEventListener('click', async ()
 
 /* ================================ KHỞI ĐỘNG ================================ */
 (async function main() {
-  await refreshAll();
+  await Promise.all([refreshAll(), loadSiteConfigAdmin()]);
   fillResultFilter();
   switchSection('overview');
   checkSyncStatus(); // Banner cảnh báo dữ liệu chưa an toàn trên Google Drive.

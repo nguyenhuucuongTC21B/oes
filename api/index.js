@@ -15,9 +15,20 @@
  *  (2) ket qua luu them servedQuestionIds + answers de in phieu ket qua;
  *  (3) endpoint /api/admin/results/:id/detail cho in phieu tung thi sinh.
  *
+ *  R10 (2026-10): (1) SITE CONFIG — luu trong usersVercel.json (ban ghi dac biet
+ *      "__siteConfig__", KHONG tao file moi tren Drive): banner, tieu de, noi
+ *      dung cac khoi div trang chu, khung gio NHAN BAI DU THI toan he thong,
+ *      cau hinh de ngau nhien (bat/tat, so cau, thoi luong), danh sach DON VI
+ *      CONG TAC 25 don vi mac dinh (Admin thay the duoc);
+ *  (2) GET /api/site-config (cong khai) + PUT /api/admin/site-config;
+ *  (3) dang ky: don vi cong tac bat buoc chon tu danh sach (gom nhom doi thi
+ *      sach so, het loi chinh ta); Admin sua nguoi dung cung theo danh sach;
+ *  (4) khung gio toan he thong gop voi khung gio tung de (mergeWindow) —
+ *      chan vao thi + nop bai ngoai khung gio o CẤP SERVER.
+ *
  *  CACH DUNG: thay TOAN BO noi dung api/index.js tren GitHub bang
  *  noi dung file nay -> Commit -> Vercel tu build -> kiem tra
- *  /api/health phai tra "build":"OES-VERCEL-R9".
+ *  /api/health phai tra "build":"OES-VERCEL-R10".
  *
  *  (Ban bundle sinh tu dong boi scripts/build_single.js -
  *   KHONG sua tay file nay; sua src/ roi build lai.)
@@ -299,6 +310,185 @@ var require_examWindow = __commonJS({
       return `${get("year")}-${get("month")}-${get("day")}T${get("hour")}:${get("minute")}`;
     }
     module2.exports = { VN_TZ, VN_OFFSET_MS, toIsoOrNull, statusOf, gateMessage, fmtVn, isoToVnInput };
+  }
+});
+
+// oes/src/utils/siteConfig.js
+var require_siteConfig = __commonJS({
+  "oes/src/utils/siteConfig.js"(exports2, module2) {
+    "use strict";
+    var { statusOf, toIsoOrNull } = require_examWindow();
+    /* R10: CẤU HÌNH GIAO DIỆN & TỔ CHỨC CUỘC THI.
+     * Lưu trong usersVercel.json dưới dạng bản ghi đặc biệt cccd="__siteConfig__"
+     * (Drive bị giới hạn KHÔNG tạo được file mới — tái dùng file có sẵn là an toàn nhất).
+     * Admin sửa qua PUT /api/admin/site-config; trang chủ + trang đăng ký đọc
+     * công khai qua GET /api/site-config. */
+    var SITE_CONFIG_MARKER = "__siteConfig__";
+    var SITE_UNITS_DEFAULT = [
+      "Văn phòng", "Thanh tra - Khiếu tố", "Phòng 1", "Phòng 2", "Phòng 3", "Phòng 7",
+      "Phòng 8", "Phòng 9", "Phòng 10", "Phòng 11", "Phòng 15",
+      "Khu vực 1", "Khu vực 2", "Khu vực 3", "Khu vực 4", "Khu vực 5", "Khu vực 6",
+      "Khu vực 7", "Khu vực 8", "Khu vực 9", "Khu vực 10", "Khu vực 11", "Khu vực 12",
+      "Trường học", "Nhóm tester"
+    ];
+    var SITE_CONFIG_DEFAULT = {
+      siteName: "",
+      headerSub: "",
+      heroTitle: "",
+      heroLead: "",
+      bannerUrl: "/banner.png",
+      noticeHtml: "",
+      introHtml: "",
+      footerText: "",
+      window: { openAt: null, closeAt: null },
+      randomExam: { enabled: true, count: 30, durationMinutes: 20 },
+      units: []
+    };
+    function siteClampInt(v, dflt, min, max) {
+      const n = parseInt(v, 10);
+      if (!Number.isFinite(n)) return dflt;
+      return Math.min(max, Math.max(min, n));
+    }
+    function readSiteConfig(usersArr) {
+      try {
+        const rec = (usersArr || []).find((u) => u && u.cccd === SITE_CONFIG_MARKER);
+        const raw = (rec && rec.config) || {};
+        return {
+          siteName: String(raw.siteName === void 0 ? "" : raw.siteName).slice(0, 200),
+          headerSub: String(raw.headerSub === void 0 ? "" : raw.headerSub).slice(0, 300),
+          heroTitle: String(raw.heroTitle === void 0 ? "" : raw.heroTitle).slice(0, 500),
+          heroLead: String(raw.heroLead === void 0 ? "" : raw.heroLead).slice(0, 3000),
+          bannerUrl: String(raw.bannerUrl === void 0 ? SITE_CONFIG_DEFAULT.bannerUrl : raw.bannerUrl).trim().slice(0, 600),
+          noticeHtml: String(raw.noticeHtml === void 0 ? "" : raw.noticeHtml).slice(0, 2000),
+          introHtml: String(raw.introHtml === void 0 ? "" : raw.introHtml).slice(0, 20000),
+          footerText: String(raw.footerText === void 0 ? "" : raw.footerText).slice(0, 2000),
+          window: {
+            openAt: raw.window && raw.window.openAt ? String(raw.window.openAt) : null,
+            closeAt: raw.window && raw.window.closeAt ? String(raw.window.closeAt) : null
+          },
+          randomExam: {
+            enabled: !(raw.randomExam && raw.randomExam.enabled === false),
+            count: siteClampInt(raw.randomExam && raw.randomExam.count, 30, 5, 100),
+            durationMinutes: siteClampInt(raw.randomExam && raw.randomExam.durationMinutes, 20, 5, 240)
+          },
+          units: Array.isArray(raw.units) ? raw.units.map((s) => String(s == null ? "" : s).trim()).filter(Boolean).slice(0, 60) : []
+        };
+      } catch (err) {
+        console.warn("[siteConfig] Khong doc duoc cau hinh, dung mac dinh:", err.message);
+        return JSON.parse(JSON.stringify(SITE_CONFIG_DEFAULT));
+      }
+    }
+    function effectiveUnits(cfg) {
+      return cfg && Array.isArray(cfg.units) && cfg.units.length > 0 ? cfg.units : SITE_UNITS_DEFAULT;
+    }
+    function validateSiteConfigPatch(patch, current) {
+      const b = patch || {};
+      const out = {};
+      if (b.siteName !== void 0) out.siteName = String(b.siteName || "").trim();
+      if (b.headerSub !== void 0) out.headerSub = String(b.headerSub || "").trim();
+      if (b.heroTitle !== void 0) out.heroTitle = String(b.heroTitle || "").trim();
+      if (b.heroLead !== void 0) out.heroLead = String(b.heroLead || "");
+      if (b.bannerUrl !== void 0) {
+        const u = String(b.bannerUrl || "").trim();
+        if (u && !/^(https?:\/\/|\/)/i.test(u)) {
+          return { ok: false, message: "URL banner phải bắt đầu bằng http(s):// hoặc / (đường dẫn trong hệ thống, VD: /banner.png)." };
+        }
+        out.bannerUrl = u;
+      }
+      if (b.noticeHtml !== void 0) out.noticeHtml = String(b.noticeHtml || "");
+      if (b.introHtml !== void 0) out.introHtml = String(b.introHtml || "");
+      if (b.footerText !== void 0) out.footerText = String(b.footerText || "");
+      if (b.window !== void 0) {
+        const w = b.window || {};
+        let openAt = null;
+        let closeAt = null;
+        if (w.openAt !== void 0 && w.openAt !== null && String(w.openAt).trim() !== "") {
+          openAt = toIsoOrNull(w.openAt);
+          if (openAt === void 0) return { ok: false, message: "Giờ BẮT ĐẦU nhận bài dự thi không hợp lệ. Hãy chọn lại trong ô lịch (giờ Việt Nam GMT+7)." };
+        }
+        if (w.closeAt !== void 0 && w.closeAt !== null && String(w.closeAt).trim() !== "") {
+          closeAt = toIsoOrNull(w.closeAt);
+          if (closeAt === void 0) return { ok: false, message: "Giờ KẾT THÚC nhận bài dự thi không hợp lệ. Hãy chọn lại trong ô lịch (giờ Việt Nam GMT+7)." };
+        }
+        if (openAt && closeAt && Date.parse(closeAt) <= Date.parse(openAt)) {
+          return { ok: false, message: "Giờ KẾT THÚC nhận bài phải MUỘN hơn giờ BẮT ĐẦU nhận bài." };
+        }
+        out.window = { openAt, closeAt };
+      }
+      if (b.randomExam !== void 0) {
+        const re = b.randomExam || {};
+        const curRe = current && current.randomExam ? current.randomExam : SITE_CONFIG_DEFAULT.randomExam;
+        out.randomExam = {
+          enabled: !(re.enabled === false),
+          count: siteClampInt(re.count, curRe.count, 5, 100),
+          durationMinutes: siteClampInt(re.durationMinutes, curRe.durationMinutes, 5, 240)
+        };
+      }
+      if (b.units !== void 0) {
+        if (!Array.isArray(b.units)) return { ok: false, message: "Danh sách đơn vị công tác phải là mảng chuỗi." };
+        const units = [];
+        for (const s of b.units) {
+          const v = String(s == null ? "" : s).trim();
+          if (!v) continue;
+          if (v.length > 80) return { ok: false, message: `Tên đơn vị quá dài (tối đa 80 ký tự): "${v.slice(0, 40)}…"` };
+          units.push(v);
+          if (units.length >= 60) break;
+        }
+        out.units = units;
+      }
+      if (Object.keys(out).length === 0) return { ok: false, message: "Không có trường cấu hình nào cần thay đổi." };
+      return { ok: true, data: out };
+    }
+    function writeSiteConfig(usersArr, patchData, adminCccd) {
+      const cur = readSiteConfig(usersArr);
+      const merged = { ...cur, ...patchData };
+      const rec = usersArr.find((u) => u && u.cccd === SITE_CONFIG_MARKER);
+      const stamp = (/* @__PURE__ */ new Date()).toISOString();
+      if (rec) {
+        rec.config = merged;
+        rec.updatedAt = stamp;
+        rec.updatedBy = adminCccd || null;
+      } else {
+        usersArr.push({ cccd: SITE_CONFIG_MARKER, config: merged, createdAt: stamp, updatedAt: stamp, updatedBy: adminCccd || null });
+      }
+      return merged;
+    }
+    /* Ghép khung giờ TOÀN HỆ THỐNG (siteConfig.window — "Thời gian nhận bài dự thi")
+     * với khung giờ riêng của từng đề. Quy tắc: KHÓA mạnh nhất thắng —
+     * đã đóng (đề hoặc hệ thống) → closed; chưa tới giờ mở (bên nào muộn hơn) →
+     * scheduled; còn lại open với giờ đóng = sớm nhất trong hai. */
+    function mergeWindow(exam, siteCfg, nowMs = Date.now()) {
+      const exWin = statusOf(exam, nowMs);
+      const cfgWin0 = siteCfg && siteCfg.window ? siteCfg.window : {};
+      if (!cfgWin0.openAt && !cfgWin0.closeAt) return exWin;
+      const cfgWin = statusOf({ openAt: cfgWin0.openAt, closeAt: cfgWin0.closeAt }, nowMs);
+      if (cfgWin.status === "closed") return cfgWin;
+      if (exWin.status === "closed") return exWin;
+      if (cfgWin.status === "scheduled" || exWin.status === "scheduled") {
+        const a = cfgWin0.openAt ? Date.parse(cfgWin0.openAt) : -1;
+        const b = exWin.openAt ? Date.parse(exWin.openAt) : -1;
+        return a >= b ? cfgWin : exWin;
+      }
+      const closes = [exWin.closeAt, cfgWin.closeAt].filter(Boolean).map((s) => Date.parse(s));
+      const soonest = closes.length > 0 ? new Date(Math.min(...closes)).toISOString() : null;
+      return {
+        status: "open",
+        openAt: exWin.openAt || cfgWin.openAt,
+        closeAt: soonest,
+        minutesUntilOpen: null,
+        minutesUntilClose: soonest ? Math.ceil((Date.parse(soonest) - nowMs) / 6e4) : null
+      };
+    }
+    module2.exports = {
+      SITE_CONFIG_MARKER,
+      SITE_UNITS_DEFAULT,
+      SITE_CONFIG_DEFAULT,
+      readSiteConfig,
+      effectiveUnits,
+      validateSiteConfigPatch,
+      writeSiteConfig,
+      mergeWindow
+    };
   }
 });
 
@@ -2183,8 +2373,19 @@ var require_public_routes = __commonJS({
     var express = require("express");
     var dataStore = require_dataStore();
     var driveClient = require_driveClient();
+    var { readSiteConfig, effectiveUnits, SITE_UNITS_DEFAULT } = require_siteConfig();
     var router = express.Router();
-    var BUILD_TAG = "OES-VERCEL-R9";
+    var BUILD_TAG = "OES-VERCEL-R10";
+    // R10: cấu hình giao diện & thời gian nhận bài dự thi — công khai cho trang chủ/đăng ký.
+    router.get("/site-config", (req, res) => {
+      const cfg = readSiteConfig(dataStore.get("users"));
+      res.json({
+        config: { ...cfg, units: effectiveUnits(cfg) },
+        unitsIsDefault: !(cfg.units && cfg.units.length > 0),
+        unitsDefault: SITE_UNITS_DEFAULT,
+        serverTime: (/* @__PURE__ */ new Date()).toISOString()
+      });
+    });
     router.get("/stats", (req, res) => {
       const results = dataStore.get("results");
       const avgScore = results.length > 0 ? Math.round(results.reduce((s, r) => s + (Number(r.score) || 0), 0) / results.length * 100) / 100 : 0;
@@ -2445,6 +2646,7 @@ var require_auth_routes = __commonJS({
     var { requireAuth } = require_auth();
     var { hashPassword, verifyPassword, signToken } = require_crypto();
     var { validateRegister } = require_validate();
+    var { readSiteConfig, effectiveUnits, SITE_CONFIG_MARKER } = require_siteConfig();
     var config = require_config();
     var router = express.Router();
     var attempts = /* @__PURE__ */ new Map();
@@ -2484,6 +2686,15 @@ var require_auth_routes = __commonJS({
         if (!check.ok) return res.status(400).json({ message: check.message });
         const data = check.data;
         const users = dataStore.get("users");
+        // R10: đơn vị công tác PHẢI thuộc danh sách của Ban Tổ chức → gom đội thi
+        // sạch sẽ (hết biến thể chính tả), tính điểm tập thể chính xác.
+        const siteCfg = readSiteConfig(users);
+        const unitsAllowed = effectiveUnits(siteCfg);
+        if (!unitsAllowed.includes(data.unit)) {
+          return res.status(400).json({
+            message: "Đơn vị công tác chưa nằm trong danh sách của Ban Tổ chức. Vui lòng tải lại trang (F5) và chọn đúng đơn vị từ danh sách xổ xuống."
+          });
+        }
         if (users.some((u) => u.cccd === data.cccd)) {
           return res.status(409).json({ message: "Số CCCD này đã được đăng ký tài khoản." });
         }
@@ -2517,7 +2728,7 @@ var require_auth_routes = __commonJS({
       if (!cccd || !password) {
         return res.status(400).json({ message: "Vui lòng nhập số CCCD và mật khẩu." });
       }
-      const user = dataStore.get("users").find((u) => u.cccd === cccd);
+      const user = dataStore.get("users").find((u) => u.cccd === cccd && u.cccd !== SITE_CONFIG_MARKER);
       if (!user || !verifyPassword(password, user.passwordHash)) {
         return res.status(401).json({ message: "Số CCCD hoặc mật khẩu không đúng." });
       }
@@ -2545,6 +2756,7 @@ var require_exam_routes = __commonJS({
     var { requireAuth } = require_auth();
     var { newId, signAttemptToken, verifyAttemptToken } = require_crypto();
     var { statusOf, gateMessage } = require_examWindow();
+    var { readSiteConfig, mergeWindow } = require_siteConfig();
     var router = express.Router();
     router.use(requireAuth);
     var DURATION_GRACE_SECONDS = 15;
@@ -2602,10 +2814,25 @@ var require_exam_routes = __commonJS({
       return a;
     }
     /** Bộ đề riêng của 1 thí sinh — TẤT ĐỊNH theo cccd, gọi bao nhiêu lần cũng ra cùng kết quả. */
-    function buildRandomQuestionsFor(cccd, sourceExam) {
+    function buildRandomQuestionsFor(cccd, sourceExam, count) {
       const pool = (sourceExam && sourceExam.questions) || [];
       const rand = oesMulberry32(oesFnv1a(RANDOM_EXAM.id + "::" + String(cccd)));
-      return oesSeededShuffle(pool, rand).slice(0, Math.min(RANDOM_EXAM.count, pool.length));
+      return oesSeededShuffle(pool, rand).slice(0, Math.min(count || RANDOM_EXAM.count, pool.length));
+    }
+    /* R10: cấu hình đề ngẫu nhiên HIỆU LỰC = mặc định + phần Admin chỉnh trong
+     * site-config (bật/tắt, số câu 5–100, thời lượng 5–240 phút). */
+    function randomExamCfg(siteCfg) {
+      const over = (siteCfg && siteCfg.randomExam) || {};
+      const n = (v, d) => {
+        const x = parseInt(v, 10);
+        return Number.isFinite(x) ? x : d;
+      };
+      return {
+        ...RANDOM_EXAM,
+        enabled: over.enabled !== false,
+        count: Math.min(100, Math.max(5, n(over.count, RANDOM_EXAM.count))),
+        durationMinutes: Math.min(240, Math.max(5, n(over.durationMinutes, RANDOM_EXAM.durationMinutes)))
+      };
     }
     function randomSourceExam() {
       return dataStore.get("exams").find((e) => e.id === RANDOM_EXAM.sourceExamId) || null;
@@ -2615,33 +2842,42 @@ var require_exam_routes = __commonJS({
     }
 
     router.get("/exams", (req, res) => {
-      const exams = dataStore.get("exams").map((e) => ({
-        id: e.id,
-        title: e.title,
-        description: e.description,
-        category: e.category,
-        durationMinutes: e.durationMinutes,
-        questionCount: (e.questions || []).length,
-        createdAt: e.createdAt,
-        // Giờ thi quy định: client dùng để khóa nút "Vào thi" + đếm ngược mở cửa.
-        openAt: e.openAt || null,
-        closeAt: e.closeAt || null,
-        windowStatus: statusOf(e).status
-      })).sort((a, b) => a.createdAt < b.createdAt ? 1 : -1);
+      const siteCfg = readSiteConfig(dataStore.get("users"));
+      const rcfg = randomExamCfg(siteCfg);
+      const exams = dataStore.get("exams").map((e) => {
+        // R10: trạng thái cửa thi = ghép khung giờ riêng của đề với khung giờ
+        // NHẬN BÀI DỰ THI toàn hệ thống (Admin đặt trong mục Giao diện & Thời gian).
+        const w = mergeWindow(e, siteCfg);
+        return {
+          id: e.id,
+          title: e.title,
+          description: e.description,
+          category: e.category,
+          durationMinutes: e.durationMinutes,
+          questionCount: (e.questions || []).length,
+          createdAt: e.createdAt,
+          // Giờ thi quy định: client dùng để khóa nút "Vào thi" + đếm ngược mở cửa.
+          openAt: w.openAt || null,
+          closeAt: w.closeAt || null,
+          windowStatus: w.status
+        };
+      }).sort((a, b) => a.createdAt < b.createdAt ? 1 : -1);
       // R9: đề ngẫu nhiên đứng ĐẦU danh sách (đề thi chính thức của cuộc thi).
+      // R10: Admin có thể TẮT đề này trong cấu hình (enabled=false).
       const randSrc = randomSourceExam();
-      if (randSrc) {
+      if (randSrc && rcfg.enabled !== false) {
+        const rw = mergeWindow(randSrc, siteCfg);
         exams.unshift({
           id: RANDOM_EXAM.id,
-          title: RANDOM_EXAM.title,
-          description: RANDOM_EXAM.description,
-          category: RANDOM_EXAM.category,
-          durationMinutes: RANDOM_EXAM.durationMinutes,
-          questionCount: Math.min(RANDOM_EXAM.count, (randSrc.questions || []).length),
+          title: rcfg.title,
+          description: rcfg.description,
+          category: rcfg.category,
+          durationMinutes: rcfg.durationMinutes,
+          questionCount: Math.min(rcfg.count, (randSrc.questions || []).length),
           createdAt: randSrc.createdAt,
-          openAt: randSrc.openAt || null,
-          closeAt: randSrc.closeAt || null,
-          windowStatus: statusOf(randSrc).status,
+          openAt: rw.openAt || null,
+          closeAt: rw.closeAt || null,
+          windowStatus: rw.status,
           isRandom: true
         });
       }
@@ -2649,18 +2885,23 @@ var require_exam_routes = __commonJS({
     });
     router.get("/exams/:id", (req, res) => {
       if (req.params.id === RANDOM_EXAM.id) {
+        const siteCfg0 = readSiteConfig(dataStore.get("users"));
+        const rcfg = randomExamCfg(siteCfg0);
+        if (rcfg.enabled === false) {
+          return res.status(404).json({ message: "Đề thi này hiện chưa được mở. Vui lòng liên hệ Ban Tổ chức." });
+        }
         const src = randomSourceExam();
         if (!src) {
           return res.status(404).json({ message: "Bộ đề nguồn (Bộ đề số 6) chưa có trong hệ thống. Vui lòng liên hệ Ban Tổ chức." });
         }
-        const picked = buildRandomQuestionsFor(req.user.cccd, src);
+        const picked = buildRandomQuestionsFor(req.user.cccd, src, rcfg.count);
         return res.json({
           exam: {
             id: RANDOM_EXAM.id,
-            title: RANDOM_EXAM.title,
-            description: RANDOM_EXAM.description,
-            category: RANDOM_EXAM.category,
-            durationMinutes: RANDOM_EXAM.durationMinutes,
+            title: rcfg.title,
+            description: rcfg.description,
+            category: rcfg.category,
+            durationMinutes: rcfg.durationMinutes,
             isRandom: true,
             // KHÔNG trả correctIndex — đáp án chỉ nằm trên máy chủ.
             questions: picked.map((q) => ({ id: q.id, text: q.text, options: q.options }))
@@ -2685,9 +2926,14 @@ var require_exam_routes = __commonJS({
       });
     });
     router.post("/exams/:id/start", (req, res) => {
+      const siteCfg = readSiteConfig(dataStore.get("users"));
+      const rcfg = randomExamCfg(siteCfg);
       const isRandom = req.params.id === RANDOM_EXAM.id;
       let exam = null;
       if (isRandom) {
+        if (rcfg.enabled === false) {
+          return res.status(404).json({ message: "Đề thi này hiện chưa được mở. Vui lòng liên hệ Ban Tổ chức." });
+        }
         const src = randomSourceExam();
         if (!src) {
           return res.status(404).json({ message: "Bộ đề nguồn (Bộ đề số 6) chưa có trong hệ thống. Vui lòng liên hệ Ban Tổ chức." });
@@ -2701,13 +2947,13 @@ var require_exam_routes = __commonJS({
         }
         exam = {
           id: RANDOM_EXAM.id,
-          title: RANDOM_EXAM.title,
-          description: RANDOM_EXAM.description,
-          category: RANDOM_EXAM.category,
-          durationMinutes: RANDOM_EXAM.durationMinutes,
+          title: rcfg.title,
+          description: rcfg.description,
+          category: rcfg.category,
+          durationMinutes: rcfg.durationMinutes,
           openAt: src.openAt || null,
           closeAt: src.closeAt || null,
-          questions: buildRandomQuestionsFor(req.user.cccd, src)
+          questions: buildRandomQuestionsFor(req.user.cccd, src, rcfg.count)
         };
       } else {
         exam = dataStore.get("exams").find((e) => e.id === req.params.id);
@@ -2719,7 +2965,8 @@ var require_exam_routes = __commonJS({
       if (existing) {
         startedAt = existing.startedAt;
       } else {
-        const win = statusOf(exam);
+        // R10: chặn theo khung giờ HIỆU LỰC (khung giờ đề ∪ khung giờ nhận bài toàn hệ thống).
+        const win = mergeWindow(exam, siteCfg);
         const blocked = gateMessage(win, exam.title);
         if (blocked) return res.status(423).json({ message: blocked });
         startedAt = Date.now();
@@ -2740,20 +2987,25 @@ var require_exam_routes = __commonJS({
         const isRandom = req.params.id === RANDOM_EXAM.id;
         let exam = null;
         if (isRandom) {
+          const siteCfgSub = readSiteConfig(dataStore.get("users"));
+          const rcfg = randomExamCfg(siteCfgSub);
+          if (rcfg.enabled === false) {
+            return res.status(404).json({ message: "Đề thi này hiện chưa được mở. Vui lòng liên hệ Ban Tổ chức." });
+          }
           const src = randomSourceExam();
           if (!src) {
             return res.status(404).json({ message: "Bộ đề nguồn (Bộ đề số 6) chưa có trong hệ thống. Vui lòng liên hệ Ban Tổ chức." });
           }
           exam = {
             id: RANDOM_EXAM.id,
-            title: RANDOM_EXAM.title,
-            description: RANDOM_EXAM.description,
-            category: RANDOM_EXAM.category,
-            durationMinutes: RANDOM_EXAM.durationMinutes,
+            title: rcfg.title,
+            description: rcfg.description,
+            category: rcfg.category,
+            durationMinutes: rcfg.durationMinutes,
             openAt: src.openAt || null,
             closeAt: src.closeAt || null,
             // Chấm điểm trên ĐÚNG bộ 30 câu đã phát cho thí sinh này (tái tạo tất định từ seed).
-            questions: buildRandomQuestionsFor(req.user.cccd, src)
+            questions: buildRandomQuestionsFor(req.user.cccd, src, rcfg.count)
           };
         } else {
           exam = dataStore.get("exams").find((e) => e.id === req.params.id);
@@ -2771,7 +3023,8 @@ var require_exam_routes = __commonJS({
           durationSeconds = Math.floor((Date.now() - attempt.startedAt) / 1e3);
           startedAtIso = new Date(attempt.startedAt).toISOString();
         } else {
-          const win = statusOf(exam);
+          // Lượt fallback (mất token): vẫn phải nằm trong khung giờ hiệu lực.
+          const win = mergeWindow(exam, readSiteConfig(dataStore.get("users")));
           const blocked = gateMessage(win, exam.title);
           if (blocked) return res.status(423).json({ message: blocked });
           const clientDur = parseInt(req.body.durationSeconds, 10);
@@ -2870,17 +3123,49 @@ var require_admin_routes = __commonJS({
     var { hashPassword, verifyPassword, newId } = require_crypto();
     var { validateExamPayload, RE_CCCD, RE_PHONE, RE_EMAIL } = require_validate();
     var { missingSampleExams } = require_sampleExams();
+    var { readSiteConfig, effectiveUnits, validateSiteConfigPatch, writeSiteConfig, SITE_CONFIG_MARKER } = require_siteConfig();
     var router = express.Router();
     router.use(requireAuth, requireAdmin);
     function syncSuffix(sync) {
       return sync && sync.synced ? "" : " ⚠ Dữ liệu CHƯA đồng bộ lên Google Drive — hệ thống sẽ tự thử lại mỗi 30 giây.";
     }
     router.get("/users", (req, res) => {
-      const users = dataStore.get("users").map(({ passwordHash, ...rest }) => rest);
+      // R10: ẩn bản ghi cấu hình "__siteConfig__" khỏi danh sách người dùng.
+      const users = dataStore.get("users")
+        .filter((u) => u && u.cccd !== SITE_CONFIG_MARKER)
+        .map(({ passwordHash, ...rest }) => rest);
       res.json({ users });
+    });
+    // R10: đọc cấu hình giao diện/thời gian (dành cho form Admin).
+    router.get("/site-config", (req, res) => {
+      const cfg = readSiteConfig(dataStore.get("users"));
+      res.json({
+        config: { ...cfg, units: effectiveUnits(cfg) },
+        unitsIsDefault: !(cfg.units && cfg.units.length > 0),
+        unitsDefault: SITE_UNITS_DEFAULT
+      });
+    });
+    // R10: lưu cấu hình giao diện, thời gian nhận bài dự thi, đề ngẫu nhiên, danh sách đơn vị.
+    router.put("/site-config", async (req, res, next) => {
+      try {
+        const users = dataStore.get("users");
+        const current = readSiteConfig(users);
+        const check = validateSiteConfigPatch(req.body || {}, current);
+        if (!check.ok) return res.status(400).json({ message: check.message });
+        const saved = writeSiteConfig(users, check.data, req.user.cccd);
+        const sync = await dataStore.saveNow("users");
+        res.json({
+          message: `Đã lưu cấu hình giao diện & thời gian nhận bài dự thi. Trang chủ sẽ áp dụng ngay khi có người truy cập.${syncSuffix(sync)}`,
+          synced: sync.synced,
+          config: { ...saved, units: effectiveUnits(saved) }
+        });
+      } catch (err) {
+        next(err);
+      }
     });
     router.put("/users/:cccd", async (req, res, next) => {
       try {
+        if (req.params.cccd === SITE_CONFIG_MARKER) return res.status(404).json({ message: "Không tìm thấy người dùng." });
         const user = dataStore.get("users").find((u) => u.cccd === req.params.cccd);
         if (!user) return res.status(404).json({ message: "Không tìm thấy người dùng." });
         const b = req.body || {};
@@ -2905,7 +3190,11 @@ var require_admin_routes = __commonJS({
         if (b.unit !== void 0) {
           const unit = String(b.unit).trim();
           if (unit.length < 2) errors.push("Đơn vị công tác không hợp lệ.");
-          else user.unit = unit;
+          else if (unit !== user.unit && !effectiveUnits(readSiteConfig(dataStore.get("users"))).includes(unit)) {
+            // R10: khi ĐỔI đơn vị phải chọn đúng danh sách của Ban Tổ chức (gom đội sạch);
+            // giữ nguyên đơn vị cũ (kể cả đơn vị tự do cũ) vẫn được chấp nhận.
+            errors.push("Đơn vị công tác phải chọn từ danh sách xổ xuống của Ban Tổ chức (hoặc giữ nguyên đơn vị hiện tại).");
+          } else user.unit = unit;
         }
         if (b.role !== void 0) {
           const role = String(b.role);
@@ -2931,6 +3220,9 @@ var require_admin_routes = __commonJS({
       try {
         if (req.params.cccd === req.user.cccd) {
           return res.status(400).json({ message: "Không thể tự xóa tài khoản đang đăng nhập." });
+        }
+        if (req.params.cccd === SITE_CONFIG_MARKER) {
+          return res.status(400).json({ message: "Bản ghi này là cấu hình hệ thống, không thể xóa theo cách này." });
         }
         const users = dataStore.get("users");
         const idx = users.findIndex((u) => u.cccd === req.params.cccd);

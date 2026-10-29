@@ -14,21 +14,102 @@
   if (track) track.innerHTML = `<span class="px-4">${slogans.repeat(2)}</span><span class="px-4">${slogans.repeat(2)}</span>`;
 })();
 
+/* ---------------- R10: CẤU HÌNH GIAO DIỆN (Admin chỉnh, lưu trên server) ---------------- */
+let siteCfg = null;
+let siteServerTime = null;
+
+async function loadSiteConfig() {
+  try {
+    const data = await api('/site-config', { auth: false });
+    siteCfg = (data && data.config) || null;
+    siteServerTime = (data && data.serverTime) || null;
+  } catch {
+    siteCfg = null; // offline: giữ nguyên giao diện gốc
+  }
+  applySiteConfig();
+}
+
+function applySiteConfig() {
+  if (!siteCfg) return;
+  // Banner (trống = ẩn banner, chỉ còn header gradient)
+  const banner = document.getElementById('site-banner');
+  if (banner) {
+    if (siteCfg.bannerUrl) {
+      banner.src = siteCfg.bannerUrl;
+      banner.classList.remove('hidden');
+    } else {
+      banner.classList.add('hidden');
+    }
+  }
+  // Tiêu đề / lead: chỉ ghi đè khi Admin nhập nội dung mới (trống = giữ mẫu).
+  const setText = (id, v) => {
+    const el = document.getElementById(id);
+    if (el && v && String(v).trim()) el.textContent = v;
+  };
+  setText('site-title', siteCfg.siteName);
+  setText('site-subtitle', siteCfg.headerSub);
+  setText('hero-title', siteCfg.heroTitle);
+  setText('hero-lead', siteCfg.heroLead);
+  // Thanh thông báo nổi bật dưới hero (HTML do Admin soạn).
+  const notice = document.getElementById('site-notice');
+  if (notice) {
+    const inner = notice.firstElementChild;
+    if (siteCfg.noticeHtml && siteCfg.noticeHtml.trim()) {
+      if (inner) inner.innerHTML = siteCfg.noticeHtml;
+      notice.classList.remove('hidden');
+    } else {
+      notice.classList.add('hidden');
+    }
+  }
+  // Nội dung khối Giới thiệu (thay toàn bộ các đoạn <p> trong div).
+  const intro = document.getElementById('intro-content');
+  if (intro && siteCfg.introHtml && siteCfg.introHtml.trim()) {
+    intro.innerHTML = siteCfg.introHtml;
+  }
+  // Đoạn giới thiệu footer.
+  setText('footer-about', siteCfg.footerText);
+}
+
+loadSiteConfig();
+
 /* ------------------------------ Đếm ngược hạn thi ------------------------------ */
 (function countdown() {
-  // Hạn cuối nhận bài dự thi — Ban Tổ chức thay đổi tại đây.
-  const DEADLINE = new Date('2026-11-04T23:59:59+07:00').getTime();
+  // Hạn cuối nhận bài dự thi dự phòng (khi server chưa cấu hình khung giờ).
+  const FALLBACK_DEADLINE = new Date('2026-11-04T23:59:59+07:00').getTime();
   const els = {
     d: document.getElementById('cd-d'),
     h: document.getElementById('cd-h'),
     m: document.getElementById('cd-m'),
     s: document.getElementById('cd-s'),
     box: document.getElementById('countdown'),
+    text: document.getElementById('receive-window-text'),
   };
   if (!els.d) return;
 
+  // Múi giờ VN cho dòng mô tả.
+  const fmtDay = (iso) => new Date(iso).toLocaleDateString('vi-VN', {
+    day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'Asia/Ho_Chi_Minh',
+  });
+
+  function targets() {
+    const w = (siteCfg && siteCfg.window) || {};
+    const openMs = w.openAt ? new Date(w.openAt).getTime() : null;
+    const closeMs = w.closeAt ? new Date(w.closeAt).getTime() : null;
+    const now = siteServerTime ? new Date(siteServerTime).getTime() : Date.now();
+    // Chưa tới giờ mở → đếm ngược tới giờ mở; ngược lại đếm tới giờ đóng.
+    if (openMs && now < openMs) {
+      return { end: openMs, text: `Nhận bài từ ${fmtDay(w.openAt)}${closeMs ? ` đến hết ${fmtDay(w.closeAt)}` : ''}` };
+    }
+    if (closeMs) {
+      return { end: closeMs, text: openMs ? `Nhận bài đến hết ${fmtDay(w.closeAt)}` : `Đến hết ngày ${fmtDay(w.closeAt)}` };
+    }
+    return { end: FALLBACK_DEADLINE, text: 'Đến hết ngày 04 tháng 11 năm 2026' };
+  }
+
   function tick() {
-    const diff = DEADLINE - Date.now();
+    const t = targets();
+    if (els.text) els.text.textContent = t.text;
+    const diff = t.end - Date.now();
     if (diff <= 0) {
       els.box.innerHTML =
         '<div class="col-span-4 bg-white/95 text-flag-700 rounded-xl py-4 font-extrabold text-center">Cuộc thi đã kết thúc — Trân trọng cảm ơn thí sinh!</div>';

@@ -42,8 +42,8 @@
       <a href="/" class="flex items-center gap-3 min-w-0">
         <span class="w-10 h-10 rounded-lg bg-flag-500 flex items-center justify-center text-gold-400 text-2xl leading-none shadow-sm shrink-0">★</span>
         <span class="min-w-0">
-          <span class="block font-extrabold text-flag-700 leading-tight tracking-wide uppercase text-sm sm:text-base truncate">Cuộc thi Trắc nghiệm</span>
-          <span class="block text-[11px] sm:text-xs text-slate-500 leading-tight uppercase tracking-wider">Nâng cao nhận thức Pháp luật – Lan tỏa tinh thần Chuyển đổi số & Bình dân học vụ số · 2026</span>
+          <span id="site-title" class="block font-extrabold text-flag-700 leading-tight tracking-wide uppercase text-sm sm:text-base truncate">Cuộc thi Trắc nghiệm</span>
+          <span id="site-subtitle" class="block text-[11px] sm:text-xs text-slate-500 leading-tight uppercase tracking-wider">Nâng cao nhận thức Pháp luật – Lan tỏa tinh thần Chuyển đổi số & Bình dân học vụ số · 2026</span>
         </span>
       </a>
       <nav class="hidden md:flex items-center gap-1 text-sm font-medium text-slate-600">
@@ -55,7 +55,7 @@
       </nav>
       <div id="header-auth" class="flex items-center gap-2"></div>
     </div>
-	 <img src="banner.png" alt="Banner">
+         <img id="site-banner" src="banner.png" alt="Banner cuộc thi" class="w-full max-h-48 object-cover object-center" onerror="this.classList.add('hidden')" />
   </header>
 
   <!-- ============ HERO ============ -->
@@ -67,11 +67,11 @@
         <div class="inline-flex items-center gap-2 bg-gold-400 text-flag-900 font-bold text-xs sm:text-sm px-3 py-1.5 rounded-full uppercase tracking-widest shadow">
           <span>★</span> Ban Tổ chức trân trọng kính mời
         </div>
-        <h1 class="mt-5 font-serif font-bold leading-tight text-3xl sm:text-4xl lg:text-[2.9rem]">
+        <h1 id="hero-title" class="mt-5 font-serif font-bold leading-tight text-3xl sm:text-4xl lg:text-[2.9rem]">
           Cuộc thi Trắc nghiệm
           <span class="block text-gold-300 text-2xl sm:text-3xl lg:text-4xl mt-1">Tìm hiểu về Luật An ninh mạng số 116/2025/QH15 NĂM 2026</span>
         </h1>
-        <p class="mt-5 text-white/85 text-sm sm:text-base leading-relaxed max-w-2xl">
+        <p id="hero-lead" class="mt-5 text-white/85 text-sm sm:text-base leading-relaxed max-w-2xl">
           Để không ai bị tụt lại phía sau trong hành trình số hóa, Ban Tổ chức chính thức phát động Cuộc thi Trắc nghiệm trực tuyến “Tìm hiểu về Luật An ninh mạng số 116/2025/QH15 năm 2026”. Đây không chỉ là một cuộc thi, mà là ngày hội lan tỏa tinh thần “Bình dân học vụ số”, đưa kiến thức pháp luật công nghệ đến gần hơn với mỗi công chức ngành Kiểm sát. Hưởng ứng làn sóng Chuyển đổi số quốc gia năm 2026, sân chơi trí tuệ này được thiết kế mở dành cho 2 cấp Kiểm sát thành phố Đà Nẵng, giao diện thông minh và vô cùng tiện lợi. Không giới hạn độ tuổi, không phân biệt chức vụ, chỉ cần có số CCCD, đơn vị công tác, đồng chí có thể tham gia thi tài và tích lũy kiến thức mọi lúc, mọi nơi. Hãy cùng nhau chung tay xây dựng một môi trường mạng an toàn, lành mạnh và văn minh! Tham gia ngay để rinh về những phần quà hấp dẫn từ Ban Tổ chức!
         </p>
         <div class="mt-7 flex flex-wrap items-center gap-3">
@@ -92,7 +92,7 @@
       <!-- Thẻ đếm ngược -->
       <div class="bg-white/10 border border-white/20 backdrop-blur rounded-2xl p-6 shadow-soft">
         <p class="text-center text-gold-300 font-bold uppercase tracking-widest text-xs">Thời gian nhận bài dự thi</p>
-        <p class="text-center text-white/70 text-xs mt-1">Đến hết ngày 04 tháng 11 năm 2026</p>
+        <p id="receive-window-text" class="text-center text-white/70 text-xs mt-1">Đến hết ngày 04 tháng 11 năm 2026</p>
         <div id="countdown" class="mt-5 grid grid-cols-4 gap-2 text-center">
           <div class="bg-white/95 text-flag-700 rounded-xl py-3"><div id="cd-d" class="text-2xl sm:text-3xl font-extrabold">--</div><div class="text-[10px] uppercase tracking-wider text-slate-500 mt-0.5">Ngày</div></div>
           <div class="bg-white/95 text-flag-700 rounded-xl py-3"><div id="cd-h" class="text-2xl sm:text-3xl font-extrabold">--</div><div class="text-[10px] uppercase tracking-wider text-slate-500 mt-0.5">Giờ</div></div>
@@ -106,6 +106,11 @@
       </div>
     </div>
   </section>
+
+  <!-- ============ THANH THÔNG BÁO (Admin sửa trong mục Giao diện & Thời gian) ============ -->
+  <div id="site-notice" class="hidden max-w-6xl mx-auto px-4 mt-8 relative z-10">
+    <div class="bg-gold-400/15 border border-gold-500/40 text-flag-800 rounded-2xl px-5 py-4 text-sm leading-relaxed"></div>
+  </div>
 
   <!-- ============ SỐ LIỆU TRUYỀN THÔNG (tự động từ server) ============ -->
   <section class="max-w-6xl mx-auto px-4 -mt-8 relative z-10">
@@ -135,7 +140,7 @@
       <div>
         <p class="text-flag-600 font-bold uppercase tracking-widest text-xs">Giới thiệu chung</p>
         <h2 class="font-serif text-2xl sm:text-3xl font-bold text-slate-900 mt-2">Sân chơi pháp luật cho mọi công dân</h2>
-        <div class="mt-4 space-y-4 text-slate-600 leading-relaxed text-[15px]">
+        <div id="intro-content" class="mt-4 space-y-4 text-slate-600 leading-relaxed text-[15px]">
           <p>
             
 1. Bối cảnh và Sứ mệnh cuộc thi
@@ -239,13 +244,13 @@ Cấu trúc đề thi năm nay được xây dựng công phu bởi Hội đồn
       <h2 class="font-serif text-2xl sm:text-3xl font-bold text-slate-900 mt-2">Vinh danh các tập thể, cá nhân xuất sắc</h2>
     </div>
     <div class="mt-10 grid md:grid-cols-3 gap-5">
-	  <div class="rounded-2xl bg-gradient-to-b from-flag-600 to-flag-800 text-white p-7 text-center shadow-soft relative overflow-hidden star-pattern">
+          <div class="rounded-2xl bg-gradient-to-b from-flag-600 to-flag-800 text-white p-7 text-center shadow-soft relative overflow-hidden star-pattern">
         <div class="text-4xl">🥇</div>
         <h3 class="font-serif font-bold text-xl mt-3 text-gold-300">01 GIẢI NHẤT TẬP THỂ CẤP PHÒNG</h3>
         <p class="text-3xl font-extrabold mt-2">01</p>
         <p class="text-sm text-white/85 mt-1">Giấy khen của Ban Tổ chức kèm tiền thưởng 2.000.000 VNĐ</p>
       </div>
-	  <div class="rounded-2xl bg-gradient-to-b from-flag-600 to-flag-800 text-white p-7 text-center shadow-soft relative overflow-hidden star-pattern">
+          <div class="rounded-2xl bg-gradient-to-b from-flag-600 to-flag-800 text-white p-7 text-center shadow-soft relative overflow-hidden star-pattern">
         <div class="text-4xl">🥇</div>
         <h3 class="font-serif font-bold text-xl mt-3 text-gold-300">01 GIẢI NHẤT TẬP THỂ CẤP KHU VỰC</h3>
         <p class="text-3xl font-extrabold mt-2">01</p>
@@ -269,7 +274,7 @@ Cấu trúc đề thi năm nay được xây dựng công phu bởi Hội đồn
         <p class="text-3xl font-extrabold mt-2 text-flag-600">03</p>
         <p class="text-sm text-slate-500 mt-1">Giấy khen của Ban Tổ chức kèm tiền thưởng 300.000 VNĐ</p>
       </div>
-	  <div class="rounded-2xl bg-white border border-slate-100 shadow-sm p-7 text-center">
+          <div class="rounded-2xl bg-white border border-slate-100 shadow-sm p-7 text-center">
         <div class="text-4xl">KK</div>
         <h3 class="font-serif font-bold text-xl mt-3 text-slate-900">02 GIẢI KHUYẾN KHÍCH</h3>
         <p class="text-3xl font-extrabold mt-2 text-flag-600">KK</p>
@@ -393,17 +398,17 @@ Cấu trúc đề thi năm nay được xây dựng công phu bởi Hội đồn
           <span class="w-9 h-9 rounded-lg bg-flag-600 flex items-center justify-center text-gold-400 text-xl">★</span>
           <span class="font-extrabold text-white uppercase text-sm leading-tight">Cuộc thi Trắc nghiệm<br /><span class="text-slate-400 font-medium normal-case text-xs">Tìm hiểu pháp luật trực tuyến 2026</span></span>
         </div>
-        <p class="text-xs text-slate-400 mt-4 leading-relaxed">
+        <p id="footer-about" class="text-xs text-slate-400 mt-4 leading-relaxed">
           Hệ thống thi trực tuyến siêu nhẹ. Dữ liệu thí sinh được lưu trữ bảo mật trên hạ tầng đám mây Google Drive.
         </p>
-		<p class="text-xs text-slate-400 mt-4 leading-relaxed">
+                <p class="text-xs text-slate-400 mt-4 leading-relaxed">
           Sử dụng cơ chế cache trong bộ nhớ và đồng bộ tự động.
-		<ul class="mt-4 space-y-2 text-sm text-slate-400">
-		  <li>Xây dựng ý tưởng: Đ/c Phạm Ái Linh - Chánh Văn phòng, Đ/c Huỳnh Thị Thu Mai - Trưởng BP CĐS</li>
-		  <li>Chiu trách nhiệm thiết kế giao diện: Đ/c Nguyễn Thanh Tịnh - Chuyên viên CY KTCC</li>
-		  <li>Coder: Đ/c Nguyễn Hữu Cường - Chuyên viên CY KTCC</li>
-		  <li>Đ/c Trần Xuân Thắng - Văn phòng chịu trách nhiệm hỗ trợ về mặt kỹ thuật trong giờ hành chính</li>
-		</ul>
+                <ul class="mt-4 space-y-2 text-sm text-slate-400">
+                  <li>Xây dựng ý tưởng: Đ/c Phạm Ái Linh - Chánh Văn phòng, Đ/c Huỳnh Thị Thu Mai - Trưởng BP CĐS</li>
+                  <li>Chiu trách nhiệm thiết kế giao diện: Đ/c Nguyễn Thanh Tịnh - Chuyên viên CY KTCC</li>
+                  <li>Coder: Đ/c Nguyễn Hữu Cường - Chuyên viên CY KTCC</li>
+                  <li>Đ/c Trần Xuân Thắng - Văn phòng chịu trách nhiệm hỗ trợ về mặt kỹ thuật trong giờ hành chính</li>
+                </ul>
         </p>
       </div>
       <div>
@@ -411,9 +416,9 @@ Cấu trúc đề thi năm nay được xây dựng công phu bởi Hội đồn
         <ul class="mt-4 space-y-2 text-sm text-slate-400">
           <li>📍 Ban Tổ chức Cuộc thi (địa chỉ: 755 Nguyễn Hữu Thọ, Cẩm Lệ, TP Đà Nẵng)</li>
           <li>✉️ bantochuc@cuocthi.vksnd.app</li>
-		  <li>✉️ doremon.dn01@gmail.com</li>
+                  <li>✉️ doremon.dn01@gmail.com</li>
           <li>☎️ 0236.3727888 (giờ hành chính các ngày làm việc)</li>
-		  <li>☎️ Trưởng Ban tổ chức: Đ/c Nguyễn Phước Toán - Phó Viện trưởng Viện Kiểm sát nhân dân thành phố Đà Nẵng</li>
+                  <li>☎️ Trưởng Ban tổ chức: Đ/c Nguyễn Phước Toán - Phó Viện trưởng Viện Kiểm sát nhân dân thành phố Đà Nẵng</li>
         </ul>
       </div>
       <div>
