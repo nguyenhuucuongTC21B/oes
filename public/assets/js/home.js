@@ -15,7 +15,7 @@
 })();
 
 /* ------------------------------ Đếm ngược hạn thi ------------------------------ */
-let DEADLINE = new Date('2026-12-31T23:59:59+07:00').getTime();
+let DEADLINE = new Date('2026-11-04T23:59:59+07:00').getTime();
 let deadlineTimer = null;
 (function countdown() {
   const els = {
