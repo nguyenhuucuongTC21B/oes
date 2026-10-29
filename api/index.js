@@ -1,6 +1,6 @@
 /**
  * ============================================================
- *  OES - FILE SERVER DUY NHAT (R7-SINGLE) DANH CHO VERCEL
+ *  OES - FILE SERVER DUY NHAT (R9-SINGLE) DANH CHO VERCEL
  * ============================================================
  *  Day la BUNDLE tu chua TOAN BO ma nguon server:
  *    api/index.js + src/app.js + src/config.js + src/store/dataStore.js
@@ -9,9 +9,15 @@
  *  Chi cac npm package trong package.json (express, googleapis)
  *  duoc nap tu node_modules - Vercel tu cai theo package.json.
  *
+ *  R9 (2026-10): (1) DE NGAU NHIEN RIENG MOI THI SINH - exam_c6_random: moi
+ *      thi sinh nhan bo 30 cau RIENG tron tu Bo de 6 (exam_c6, 150 cau Luat ANM
+ *      2026) bang seed tat dinh theo CCCD, thoi luong 20 phut, chan thi lai;
+ *  (2) ket qua luu them servedQuestionIds + answers de in phieu ket qua;
+ *  (3) endpoint /api/admin/results/:id/detail cho in phieu tung thi sinh.
+ *
  *  CACH DUNG: thay TOAN BO noi dung api/index.js tren GitHub bang
  *  noi dung file nay -> Commit -> Vercel tu build -> kiem tra
- *  /api/health phai tra "build":"OES-VERCEL-R8".
+ *  /api/health phai tra "build":"OES-VERCEL-R9".
  *
  *  (Ban bundle sinh tu dong boi scripts/build_single.js -
  *   KHONG sua tay file nay; sua src/ roi build lai.)
@@ -2178,7 +2184,7 @@ var require_public_routes = __commonJS({
     var dataStore = require_dataStore();
     var driveClient = require_driveClient();
     var router = express.Router();
-    var BUILD_TAG = "OES-VERCEL-R8";
+    var BUILD_TAG = "OES-VERCEL-R9";
     router.get("/stats", (req, res) => {
       const results = dataStore.get("results");
       const avgScore = results.length > 0 ? Math.round(results.reduce((s, r) => s + (Number(r.score) || 0), 0) / results.length * 100) / 100 : 0;
@@ -2542,6 +2548,72 @@ var require_exam_routes = __commonJS({
     var router = express.Router();
     router.use(requireAuth);
     var DURATION_GRACE_SECONDS = 15;
+
+    /* ===================== R9: ĐỀ NGẪU NHIÊN RIÊNG MỖI THÍ SINH =====================
+     * exam_c6_random là đề "ẢO": KHÔNG lưu trong examsVercel.json. Khi đề nguồn
+     * (exam_c6 — Bộ đề số 6: 150 câu Luật An ninh mạng 2026) có trong kho dữ liệu,
+     * hệ thống tự hiển thị thêm đề này đầu danh sách. Mỗi thí sinh nhận 1 bộ 30 câu
+     * RIÊNG trộn bằng thuật toán TẤT ĐỊNH (seed = băm FNV-1a của CCCD): cùng một
+     * thí sinh dù vào lại bao nhiêu lần, đổi máy, đổi trình duyệt đều nhận ĐÚNG
+     * bộ đề cũ → chấm điểm và đối chiếu luôn tái tạo được, không cần lưu trạng thái.
+     * Hai thí sinh khác nhau gần như chắc chắn khác bộ đề VÀ khác thứ tự câu
+     * (150 chọn 30 ≈ 9×10^31 tổ hợp) → không thể chép nhau.
+     * Khung giờ thi (openAt/closeAt) kế thừa từ đề nguồn — BTC đặt giờ trên đề 6.
+     */
+    var RANDOM_EXAM = {
+      id: "exam_c6_random",
+      sourceExamId: "exam_c6",
+      count: 30,
+      durationMinutes: 20,
+      // Cuộc thi chính thức: mỗi thí sinh chỉ thi 1 lần. Muốn mở lại lượt thi cho
+      // một thí sinh: Admin xóa kết quả cũ của thí sinh đó trong mục Bảng điểm.
+      allowRetake: false,
+      title: "Đề thi chính thức - Bộ đề riêng 30 câu (Luật An ninh mạng 2026)",
+      description: "Mỗi thí sinh nhận một bộ đề RIÊNG gồm 30 câu trộn ngẫu nhiên từ ngân hàng 150 câu về Luật An ninh mạng và các Nghị định hướng dẫn năm 2026 (Bộ đề số 6). Thời gian làm bài: 20 phút. Mỗi thí sinh chỉ được thi một lần.",
+      category: "Pháp luật An ninh mạng 2026"
+    };
+    function oesFnv1a(str) {
+      let h = 0x811c9dc5;
+      const s = String(str);
+      for (let i = 0; i < s.length; i++) {
+        h ^= s.charCodeAt(i);
+        h = Math.imul(h, 0x01000193) >>> 0;
+      }
+      return h >>> 0;
+    }
+    function oesMulberry32(seed) {
+      let a = seed >>> 0;
+      return function () {
+        a |= 0;
+        a = (a + 0x6d2b79f5) | 0;
+        let t = Math.imul(a ^ (a >>> 15), 1 | a);
+        t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+      };
+    }
+    function oesSeededShuffle(arr, rand) {
+      const a = arr.slice();
+      for (let i = a.length - 1; i > 0; i--) {
+        const j = Math.floor(rand() * (i + 1));
+        const tmp = a[i];
+        a[i] = a[j];
+        a[j] = tmp;
+      }
+      return a;
+    }
+    /** Bộ đề riêng của 1 thí sinh — TẤT ĐỊNH theo cccd, gọi bao nhiêu lần cũng ra cùng kết quả. */
+    function buildRandomQuestionsFor(cccd, sourceExam) {
+      const pool = (sourceExam && sourceExam.questions) || [];
+      const rand = oesMulberry32(oesFnv1a(RANDOM_EXAM.id + "::" + String(cccd)));
+      return oesSeededShuffle(pool, rand).slice(0, Math.min(RANDOM_EXAM.count, pool.length));
+    }
+    function randomSourceExam() {
+      return dataStore.get("exams").find((e) => e.id === RANDOM_EXAM.sourceExamId) || null;
+    }
+    function findResultOf(cccd, examId) {
+      return dataStore.get("results").find((r) => r.cccd === cccd && r.examId === examId) || null;
+    }
+
     router.get("/exams", (req, res) => {
       const exams = dataStore.get("exams").map((e) => ({
         id: e.id,
@@ -2556,9 +2628,45 @@ var require_exam_routes = __commonJS({
         closeAt: e.closeAt || null,
         windowStatus: statusOf(e).status
       })).sort((a, b) => a.createdAt < b.createdAt ? 1 : -1);
+      // R9: đề ngẫu nhiên đứng ĐẦU danh sách (đề thi chính thức của cuộc thi).
+      const randSrc = randomSourceExam();
+      if (randSrc) {
+        exams.unshift({
+          id: RANDOM_EXAM.id,
+          title: RANDOM_EXAM.title,
+          description: RANDOM_EXAM.description,
+          category: RANDOM_EXAM.category,
+          durationMinutes: RANDOM_EXAM.durationMinutes,
+          questionCount: Math.min(RANDOM_EXAM.count, (randSrc.questions || []).length),
+          createdAt: randSrc.createdAt,
+          openAt: randSrc.openAt || null,
+          closeAt: randSrc.closeAt || null,
+          windowStatus: statusOf(randSrc).status,
+          isRandom: true
+        });
+      }
       res.json({ exams });
     });
     router.get("/exams/:id", (req, res) => {
+      if (req.params.id === RANDOM_EXAM.id) {
+        const src = randomSourceExam();
+        if (!src) {
+          return res.status(404).json({ message: "Bộ đề nguồn (Bộ đề số 6) chưa có trong hệ thống. Vui lòng liên hệ Ban Tổ chức." });
+        }
+        const picked = buildRandomQuestionsFor(req.user.cccd, src);
+        return res.json({
+          exam: {
+            id: RANDOM_EXAM.id,
+            title: RANDOM_EXAM.title,
+            description: RANDOM_EXAM.description,
+            category: RANDOM_EXAM.category,
+            durationMinutes: RANDOM_EXAM.durationMinutes,
+            isRandom: true,
+            // KHÔNG trả correctIndex — đáp án chỉ nằm trên máy chủ.
+            questions: picked.map((q) => ({ id: q.id, text: q.text, options: q.options }))
+          }
+        });
+      }
       const exam = dataStore.get("exams").find((e) => e.id === req.params.id);
       if (!exam) return res.status(404).json({ message: "Không tìm thấy đề thi." });
       res.json({
@@ -2577,8 +2685,34 @@ var require_exam_routes = __commonJS({
       });
     });
     router.post("/exams/:id/start", (req, res) => {
-      const exam = dataStore.get("exams").find((e) => e.id === req.params.id);
-      if (!exam) return res.status(404).json({ message: "Không tìm thấy đề thi." });
+      const isRandom = req.params.id === RANDOM_EXAM.id;
+      let exam = null;
+      if (isRandom) {
+        const src = randomSourceExam();
+        if (!src) {
+          return res.status(404).json({ message: "Bộ đề nguồn (Bộ đề số 6) chưa có trong hệ thống. Vui lòng liên hệ Ban Tổ chức." });
+        }
+        // Cuộc thi chính thức: đã nộp bài thành công thì khóa lượt thi mới.
+        if (!RANDOM_EXAM.allowRetake && findResultOf(req.user.cccd, RANDOM_EXAM.id)) {
+          return res.status(403).json({
+            message: "Bạn ĐÃ HOÀN THÀNH bài thi này trước đó. Mỗi thí sinh chỉ được làm bài chính thức một lần. Nếu cần thi lại vì lý do khách quan, hãy liên hệ Ban Tổ chức để mở lại lượt thi.",
+            alreadySubmitted: true
+          });
+        }
+        exam = {
+          id: RANDOM_EXAM.id,
+          title: RANDOM_EXAM.title,
+          description: RANDOM_EXAM.description,
+          category: RANDOM_EXAM.category,
+          durationMinutes: RANDOM_EXAM.durationMinutes,
+          openAt: src.openAt || null,
+          closeAt: src.closeAt || null,
+          questions: buildRandomQuestionsFor(req.user.cccd, src)
+        };
+      } else {
+        exam = dataStore.get("exams").find((e) => e.id === req.params.id);
+        if (!exam) return res.status(404).json({ message: "Không tìm thấy đề thi." });
+      }
       const totalSeconds = exam.durationMinutes * 60;
       const existing = verifyAttemptToken(req.body.attemptToken, req.user.cccd, exam.id);
       let startedAt;
@@ -2603,8 +2737,28 @@ var require_exam_routes = __commonJS({
     });
     router.post("/exams/:id/submit", async (req, res, next) => {
       try {
-        const exam = dataStore.get("exams").find((e) => e.id === req.params.id);
-        if (!exam) return res.status(404).json({ message: "Không tìm thấy đề thi." });
+        const isRandom = req.params.id === RANDOM_EXAM.id;
+        let exam = null;
+        if (isRandom) {
+          const src = randomSourceExam();
+          if (!src) {
+            return res.status(404).json({ message: "Bộ đề nguồn (Bộ đề số 6) chưa có trong hệ thống. Vui lòng liên hệ Ban Tổ chức." });
+          }
+          exam = {
+            id: RANDOM_EXAM.id,
+            title: RANDOM_EXAM.title,
+            description: RANDOM_EXAM.description,
+            category: RANDOM_EXAM.category,
+            durationMinutes: RANDOM_EXAM.durationMinutes,
+            openAt: src.openAt || null,
+            closeAt: src.closeAt || null,
+            // Chấm điểm trên ĐÚNG bộ 30 câu đã phát cho thí sinh này (tái tạo tất định từ seed).
+            questions: buildRandomQuestionsFor(req.user.cccd, src)
+          };
+        } else {
+          exam = dataStore.get("exams").find((e) => e.id === req.params.id);
+          if (!exam) return res.status(404).json({ message: "Không tìm thấy đề thi." });
+        }
         const questions = exam.questions || [];
         if (questions.length === 0) {
           return res.status(400).json({ message: "Đề thi chưa có câu hỏi hợp lệ." });
@@ -2643,6 +2797,14 @@ var require_exam_routes = __commonJS({
             });
           }
         }
+        // R9: đề chính thức — chặn nộp bài của lượt thi KHÁC khi thí sinh đã có
+        // kết quả (nộp trùng cùng attemptId vẫn được xử lý ở nhánh duplicate phía trên).
+        if (isRandom && !RANDOM_EXAM.allowRetake && findResultOf(req.user.cccd, RANDOM_EXAM.id)) {
+          return res.status(403).json({
+            message: "Bạn ĐÃ HOÀN THÀNH bài thi này trước đó. Mỗi thí sinh chỉ được làm bài chính thức một lần. Nếu cần thi lại vì lý do khách quan, hãy liên hệ Ban Tổ chức để mở lại lượt thi.",
+            alreadySubmitted: true
+          });
+        }
         const answers = Array.isArray(req.body.answers) ? req.body.answers : [];
         const answerMap = new Map(
           answers.map((a) => [String(a && a.qid), parseInt(a && a.choice, 10)])
@@ -2668,6 +2830,15 @@ var require_exam_routes = __commonJS({
           durationSeconds,
           submittedAt: (/* @__PURE__ */ new Date()).toISOString()
         };
+        // R9: lưu chi tiết bài làm để Admin in phiếu kết quả + đối chiếu sau cuộc thi.
+        if (isRandom) {
+          result.isRandom = true;
+          result.sourceExamId = RANDOM_EXAM.sourceExamId;
+          result.servedQuestionIds = questions.map((q) => q.id);
+        }
+        result.answers = [...answerMap.entries()]
+          .filter(([qid]) => qid && qid !== "undefined" && qid !== "null")
+          .map(([qid, choice]) => ({ qid: qid.slice(0, 64), choice: Number.isInteger(choice) ? choice : null }));
         dataStore.get("results").push(result);
         const sync = await dataStore.saveNow("results");
         res.status(201).json({
@@ -2908,6 +3079,47 @@ var require_admin_routes = __commonJS({
         (a, b) => a.submittedAt < b.submittedAt ? 1 : -1
       );
       res.json({ results });
+    });
+    // R9: chi tiết bài làm theo TỪNG CÂU — dùng cho "In phiếu kết quả" của thí sinh.
+    // Với đề ngẫu nhiên: tái tạo lại đúng bộ 30 câu đã phát (từ servedQuestionIds)
+    // kèm đáp án đúng + đáp án thí sinh đã chọn.
+    router.get("/results/:id/detail", (req, res) => {
+      const r = dataStore.get("results").find((x) => x.id === req.params.id);
+      if (!r) return res.status(404).json({ message: "Không tìm thấy kết quả bài làm." });
+      let questions = [];
+      if (r.isRandom && Array.isArray(r.servedQuestionIds)) {
+        const src = dataStore.get("exams").find((e) => e.id === (r.sourceExamId || "exam_c6"));
+        const byId = new Map(((src && src.questions) || []).map((q) => [q.id, q]));
+        questions = r.servedQuestionIds.map((qid) => byId.get(qid)).filter(Boolean);
+      } else {
+        const exam = dataStore.get("exams").find((e) => e.id === r.examId);
+        if (exam) questions = (exam.questions || []).slice();
+      }
+      const answerMap = {};
+      for (const a of r.answers || []) {
+        if (a && a.qid) answerMap[String(a.qid)] = Number.isInteger(a.choice) ? a.choice : null;
+      }
+      const attempts = dataStore.get("results").filter((x) => x.cccd === r.cccd && x.examId === r.examId).length;
+      res.json({
+        result: {
+          id: r.id,
+          cccd: r.cccd,
+          examId: r.examId,
+          examTitle: r.examTitle,
+          category: r.category,
+          score: r.score,
+          correct: r.correct,
+          total: r.total,
+          durationSeconds: r.durationSeconds,
+          startedAt: r.startedAt || null,
+          submittedAt: r.submittedAt || null,
+          isRandom: Boolean(r.isRandom),
+          attempts,
+          note: r.note || null
+        },
+        questions: questions.map((q) => ({ id: q.id, text: q.text, options: q.options, correctIndex: q.correctIndex })),
+        answers: answerMap
+      });
     });
     router.put("/results/:id", async (req, res, next) => {
       try {
