@@ -111,6 +111,23 @@ function fmtDuration(totalSeconds) {
   return `${m} phút ${String(s % 60).padStart(2, '0')} giây`;
 }
 
+/** R11 — Mili giây → "11 phút 58.412 giây" (chính xác đến MILI GIÂY).
+ * Dùng đồng nhất cho màn kết quả thí sinh, bảng điểm admin và phiếu bài làm.
+ * Ưu tiên durationMs; thiếu thì suy ra từ durationSeconds (bản cũ). */
+function fmtDurationMs(ms, fallbackSeconds) {
+  let v = Number(ms);
+  if (!Number.isFinite(v) || v <= 0) {
+    v = (Number(fallbackSeconds) || 0) * 1000;
+  }
+  v = Math.max(0, Math.round(v));
+  const m = Math.floor(v / 60000);
+  const sec = (v % 60000) / 1000; // 0..59.999
+  const secStr = sec.toFixed(3).replace('.', ','); // kiểu VN: 58,412
+  return m > 0
+    ? `${m} phút ${secStr.padStart(6, '0')} giây`
+    : `${secStr} giây`;
+}
+
 /** mm:ss cho đồng hồ đếm ngược */
 function fmtClock(totalSeconds) {
   const s = Math.max(0, Math.floor(totalSeconds));

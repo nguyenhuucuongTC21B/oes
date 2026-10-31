@@ -64,6 +64,7 @@ document.getElementById('form-login').addEventListener('submit', async (e) => {
 document.getElementById('form-register').addEventListener('submit', async (e) => {
   e.preventDefault();
   const payload = {
+    fullName: document.getElementById('rg-fullname').value.trim(), // R11: Họ và tên
     cccd: document.getElementById('rg-cccd').value.trim(),
     phone: document.getElementById('rg-phone').value.trim(),
     email: document.getElementById('rg-email').value.trim(),
@@ -76,6 +77,7 @@ document.getElementById('form-register').addEventListener('submit', async (e) =>
 
   // Kiểm tra bắt buộc nhập đủ toàn bộ trường thông tin.
   const requiredFields = [
+    ['rg-fullname', 'Họ và tên'],
     ['rg-cccd', 'Số CCCD'], ['rg-phone', 'Số điện thoại'], ['rg-email', 'Email'],
     ['rg-position', 'Chức vụ'], ['rg-unit', 'Đơn vị công tác'], ['rg-password', 'Mật khẩu'],
   ];

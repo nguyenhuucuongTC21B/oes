@@ -65,6 +65,10 @@
           <h1 id="q-title" class="font-serif text-xl sm:text-2xl font-bold text-slate-900 mt-1.5 truncate"></h1>
         </div>
         <div class="flex items-center gap-3">
+          <!-- R11: đồng hồ "Đã làm" chính xác đến MILI GIÂY (đối chiếu giờ máy chủ) -->
+          <div id="elapsed" class="hidden items-center gap-2 bg-white border border-slate-200 text-slate-700 font-semibold text-sm px-4 py-2.5 rounded-xl shadow tabular-nums">
+            <span class="text-xs font-medium text-slate-400">Đã làm</span><span id="elapsed-text">0,000 giây</span>
+          </div>
           <div id="timer" class="flex items-center gap-2 bg-flag-600 text-white font-extrabold text-lg px-4 py-2.5 rounded-xl shadow tabular-nums">
             <span class="text-sm font-medium opacity-80">⏱</span><span id="timer-text">--:--</span>
           </div>

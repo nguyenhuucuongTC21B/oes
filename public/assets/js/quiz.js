@@ -24,6 +24,9 @@ const state = {
   timerId: null,
   submitting: false,
   attemptToken: '',      // HMAC { cccd, examId, startedAt } — phiên thi stateless
+  startedAtMs: 0,        // R11: mốc bắt đầu (giờ máy chủ) — cơ sở đếm mili giây
+  clockOffset: 0,        // R11: Date.now() client − serverNow — hiệu chỉnh lệch đồng hồ
+  elapsedTimerId: null,  // R11: nhịp cập nhật đồng hồ "Đã làm" mili giây
 };
 
 /* ------------------------------ Tiện ích view ------------------------------ */
@@ -278,6 +281,10 @@ async function startExam(examId) {
     if (start.attemptToken) saveAttemptToken(start.attemptToken);
     state.totalSeconds = start.durationMinutes * 60;
     state.remaining = start.remainingSeconds;
+    // R11: đồng hồ "Đã làm" chạy theo GIỜ MÁY CHỦ (chính xác đến mili giây) —
+    // cùng cơ sở với durationMs server ghi khi nộp bài, không lệch đồng hồ máy thí sinh.
+    state.startedAtMs = Date.parse(start.startedAt) || 0;
+    state.clockOffset = Date.now() - (Number(start.serverNow) || Date.now());
     // Giữ lại câu trả lời khớp với bộ đề hiện tại (lượt mới khác lượt cũ →
     // tự loại đáp án "ma" của lượt trước, tránh tick sẵn câu không thuộc đề).
     const savedAnswers = loadAnswersLocal();
@@ -299,6 +306,7 @@ async function startExam(examId) {
     renderPalette();
     renderQuestion();
     startTimer();
+    startElapsedTicker(); // R11: hiển thị thời gian làm bài chính xác đến mili giây
     showView('view-quiz');
   } catch (err) {
     toast(err.message, 'error');
@@ -403,6 +411,32 @@ function updateTimerUI() {
   box.classList.toggle('bg-flag-600', !danger);
 }
 
+/* ================= R11: ĐỒNG HỒ "ĐÃ LÀM" CHÍNH XẠC DEN MILI GIAY =================
+ * Thời gian đã làm = giờ máy chủ hiện tại − startedAt (máy chủ cấp khi vào thi).
+ * Hiển thị cạnh đồng hồ đếm ngược để thí sinh tự đối chiếu với bảng xếp hạng
+ * (cùng điểm → thời gian ÍT hơn xếp trên — tính đến mili giây). */
+function elapsedMsNow() {
+  if (!state.startedAtMs) return 0;
+  const serverNow = Date.now() - state.clockOffset;
+  return Math.max(0, serverNow - state.startedAtMs);
+}
+function updateElapsedUI() {
+  const box = document.getElementById('elapsed');
+  const txt = document.getElementById('elapsed-text');
+  if (!box || !txt) return;
+  box.classList.remove('hidden');
+  box.classList.add('flex');
+  txt.textContent = fmtDurationMs(elapsedMsNow());
+}
+function startElapsedTicker() {
+  stopElapsedTicker();
+  updateElapsedUI();
+  state.elapsedTimerId = setInterval(updateElapsedUI, 47); // ~21 lần/giây — mượt mà, nhẹ CPU
+}
+function stopElapsedTicker() {
+  if (state.elapsedTimerId) { clearInterval(state.elapsedTimerId); state.elapsedTimerId = null; }
+}
+
 /* ============================ NỘP BÀI ============================ */
 function askSubmit() {
   if (state.submitting) return;
@@ -412,7 +446,8 @@ function askSubmit() {
   document.getElementById('modal-submit-detail').innerHTML =
     `Bạn đã trả lời <b>${answered}/${total}</b> câu` +
     (unanswered > 0 ? `, còn <b class="text-red-600">${unanswered} câu bỏ trống</b>. Câu bỏ trống sẽ không được tính điểm.` : '.') +
-    ` Thời gian còn lại: <b>${fmtClock(state.remaining)}</b>.`;
+    ` Thời gian còn lại: <b>${fmtClock(state.remaining)}</b>.` +
+    ` Thời gian đã làm: <b>${fmtDurationMs(elapsedMsNow())}</b> (chính xác đến mili giây theo giờ máy chủ).`;
   openModal('modal-submit');
 }
 
@@ -420,6 +455,7 @@ async function doSubmit() {
   if (state.submitting) return;
   state.submitting = true;
   stopTimer();
+  stopElapsedTicker(); // R11: đóng băng đồng hồ mili giây đúng thời điểm nộp
   setBusyUI(true);
   const payload = {
     answers: Object.entries(state.answers).map(([qid, choice]) => ({ qid, choice })),
@@ -441,7 +477,7 @@ async function doSubmit() {
     state.submitting = false;
     setBusyUI(false);
     // Nếu máy chủ vẫn yêu cầu đăng nhập hợp lệ mà phiên hết hạn, api() đã redirect.
-    if (state.remaining > 0) startTimer();
+    if (state.remaining > 0) { startTimer(); startElapsedTicker(); }
   }
 }
 
@@ -466,7 +502,8 @@ function renderResult(r) {
   animateScore(s.score10);
   document.getElementById('r-correct').textContent = `${r.correct} câu`;
   document.getElementById('r-total').textContent = `${r.total} câu`;
-  document.getElementById('r-duration').textContent = fmtDuration(r.durationSeconds);
+  // R11 — thời gian làm bài chính xác đến MILI GIÂY (giờ máy chủ ghi nhận).
+  document.getElementById('r-duration').textContent = fmtDurationMs(r.durationMs, r.durationSeconds);
   document.getElementById('r-s10').textContent = fmtScore(s.score10);
   document.getElementById('r-s100').textContent = fmtScore(s.score100);
   document.getElementById('r-s60').textContent = fmtScore(s.score60);

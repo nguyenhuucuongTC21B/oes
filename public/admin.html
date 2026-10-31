@@ -62,6 +62,9 @@
       <button data-section="teams" class="nav-btn flex items-center gap-2.5 px-4 py-2.5 rounded-xl text-sm font-semibold whitespace-nowrap transition">
         <span>🤝</span> Điểm tập thể
       </button>
+      <button data-section="awards" class="nav-btn flex items-center gap-2.5 px-4 py-2.5 rounded-xl text-sm font-semibold whitespace-nowrap transition">
+        <span>🏅</span> Xét giải thưởng
+      </button>
       <button data-section="news" class="nav-btn flex items-center gap-2.5 px-4 py-2.5 rounded-xl text-sm font-semibold whitespace-nowrap transition">
         <span>📰</span> Tin bài
       </button>
@@ -159,6 +162,7 @@
               <thead class="bg-slate-50 text-slate-500 uppercase text-[11px] tracking-wider">
                 <tr>
                   <th class="text-left px-5 py-3.5">STT</th>
+                  <th class="text-left px-5 py-3.5">Họ và tên</th>
                   <th class="text-left px-5 py-3.5">Thí sinh (CCCD)</th>
                   <th class="text-left px-5 py-3.5">Hạng mục · Đề thi</th>
                   <th class="text-left px-5 py-3.5">Kết quả</th>
@@ -198,14 +202,72 @@
                   <th class="text-center px-3 py-3.5">TB thang 100</th>
                   <th class="text-center px-3 py-3.5">TB thang 60</th>
                   <th class="text-center px-3 py-3.5">Cao nhất (10)</th>
-                  <th class="text-left px-4 py-3.5">3 thành viên tốt nhất</th>
+                  <th class="text-center px-3 py-3.5" title="Số thành viên đạt ĐIỂM TUYỆT ĐỐI thang 10 — tiêu chí thứ 3 khi xét giải tập thể">Đạt tuyệt đối (10đ)</th>
+                  <th class="text-left px-4 py-3.5">3 thành viên tốt nhất (Họ tên)</th>
                 </tr>
               </thead>
               <tbody id="teams-tbody" class="divide-y divide-slate-100"></tbody>
             </table>
           </div>
         </div>
-        <p class="mt-3 text-[11px] text-slate-400 leading-relaxed">“Nhóm tester” không xét giải tập thể (hiển thị cuối bảng). Điểm TB thang 60 của đề 30 câu tương ứng mỗi câu 2 điểm. Bấm “In bảng” để in bảng điểm tập thể hiện tại.</p>
+        <p class="mt-3 text-[11px] text-slate-400 leading-relaxed">“Nhóm tester” không xét giải tập thể (hiển thị cuối bảng). Xếp hạng &amp; xét giải tập thể theo đúng thể lệ: <b>điểm TB thang 10 → tỷ lệ tham dự → số bài đạt TUYỆT ĐỐI thang 10</b>; trùng cả 3 chỉ số là <b>đồng hạng/đồng giải</b> (không dùng tên đơn vị để phân hạng). Thành tích cá nhân đóng góp: cùng điểm → thời gian làm bài ÍT hơn (mili giây) → nộp SỚM hơn. Bấm “In bảng” để in bảng điểm tập thể hiện tại.</p>
+      </section>
+
+      <!-- ========== XÉT GIẢI THƯỞNG (R11) ========== -->
+      <section id="section-awards" class="admin-section hidden">
+        <div class="flex items-end justify-between flex-wrap gap-3">
+          <div>
+            <h1 class="font-serif text-2xl font-bold text-slate-900">Xét thành tích &amp; giải thưởng</h1>
+            <p class="text-sm text-slate-500 mt-1">Tự động theo thể lệ đã chốt: cá nhân 1 Nhất · 1 Nhì · 1 Ba · 2 Khuyến khích — tập thể 1 Nhất cấp Khu vực + 1 Nhất cấp Phòng.</p>
+          </div>
+          <div class="flex gap-2">
+            <select id="awards-exam-filter" class="field !w-64"><option value="">Đang tải...</option></select>
+            <button onclick="printAwards()" class="px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-600 hover:bg-slate-50 transition">🖨 In biên bản xét giải</button>
+          </div>
+        </div>
+
+        <div class="mt-3 grid lg:grid-cols-2 gap-4">
+          <div class="rounded-2xl border-2 border-gold-400 bg-gold-400/10 p-4">
+            <p class="text-xs font-bold uppercase tracking-wider text-gold-700">Giải Nhất tập thể — cấp Khu vực</p>
+            <div id="award-team-kv" class="mt-2 text-sm text-slate-700">—</div>
+          </div>
+          <div class="rounded-2xl border-2 border-flag-500 bg-flag-50 p-4">
+            <p class="text-xs font-bold uppercase tracking-wider text-flag-700">Giải Nhất tập thể — cấp Phòng</p>
+            <div id="award-team-ph" class="mt-2 text-sm text-slate-700">—</div>
+          </div>
+        </div>
+
+        <div class="mt-4 bg-white rounded-2xl border border-slate-200 overflow-hidden">
+          <div class="px-5 py-3.5 border-b border-slate-100 flex items-center justify-between flex-wrap gap-2">
+            <h2 class="font-bold text-slate-900">Bảng xếp hạng cá nhân &amp; giải thưởng</h2>
+            <span class="text-[11px] text-slate-400">Thời gian làm bài tính chính xác đến mili giây theo giờ máy chủ</span>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+              <thead class="bg-slate-50 text-slate-500 uppercase text-[11px] tracking-wider">
+                <tr>
+                  <th class="text-left px-4 py-3">Hạng</th>
+                  <th class="text-left px-4 py-3">Giải thưởng</th>
+                  <th class="text-left px-4 py-3">Họ và tên</th>
+                  <th class="text-left px-4 py-3">CCCD</th>
+                  <th class="text-left px-4 py-3">Đơn vị</th>
+                  <th class="text-center px-3 py-3">Thang 10</th>
+                  <th class="text-center px-3 py-3">Thang 100</th>
+                  <th class="text-center px-3 py-3">Thang 60</th>
+                  <th class="text-center px-3 py-3">Số câu đúng</th>
+                  <th class="text-left px-4 py-3">Thời gian làm bài (mili giây)</th>
+                  <th class="text-left px-4 py-3">Nộp bài lúc</th>
+                </tr>
+              </thead>
+              <tbody id="awards-tbody" class="divide-y divide-slate-100"></tbody>
+            </table>
+          </div>
+        </div>
+        <div class="mt-3 rounded-2xl bg-white border border-slate-200 p-4 text-xs text-slate-500 leading-relaxed">
+          <p class="font-bold text-slate-700 mb-1">Chữ luật xét giải (công bố minh bạch):</p>
+          <p id="awards-rule-individual"></p>
+          <p id="awards-rule-team" class="mt-1"></p>
+        </div>
       </section>
 
       <!-- ========== TIN BÀI — TIN TỨC & TUYÊN TRUYỀN (R10b) ========== -->
@@ -374,6 +436,10 @@
           <input id="mu-cccd" class="field bg-slate-100" type="text" disabled />
         </div>
         <div class="grid grid-cols-2 gap-3">
+          <div class="col-span-2">
+            <label class="block text-sm font-semibold text-slate-700 mb-1">Họ và tên *</label>
+            <input id="mu-fullname" class="field" type="text" maxlength="80" placeholder="Bắt buộc — dùng cho xét giải, vinh danh" />
+          </div>
           <div>
             <label class="block text-sm font-semibold text-slate-700 mb-1">Số điện thoại *</label>
             <input id="mu-phone" class="field" type="tel" maxlength="10" />

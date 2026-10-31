@@ -37,6 +37,7 @@ function switchSection(name) {
   if (name === 'exams') renderExams();
   if (name === 'results') renderResults();
   if (name === 'teams') renderTeams();
+  if (name === 'awards') renderAwards(); // R11: xét giải thưởng
   if (name === 'news') renderNewsList();
   if (name === 'site') loadSiteForm();
 }
@@ -116,7 +117,7 @@ function roleBadge(role) {
 function renderUsers() {
   const keyword = document.getElementById('user-search').value.trim().toLowerCase();
   const list = cache.users.filter((u) =>
-    !keyword || [u.cccd, u.email, u.unit, u.position].some((v) => String(v || '').toLowerCase().includes(keyword))
+    !keyword || [u.cccd, u.email, u.unit, u.position, u.fullName].some((v) => String(v || '').toLowerCase().includes(keyword))
   );
   const tbody = document.getElementById('users-tbody');
   if (list.length === 0) {
@@ -127,8 +128,8 @@ function renderUsers() {
     <tr class="hover:bg-slate-50/70">
       <td class="px-5 py-3.5 font-mono font-semibold text-slate-800">${esc(u.cccd)}<div class="text-[11px] text-slate-400 font-sans">Tạo: ${fmtDate(u.createdAt)}</div></td>
       <td class="px-5 py-3.5">
-        <div class="text-slate-700 font-medium">${esc(u.phone)}</div>
-        <div class="text-xs text-slate-400">${esc(u.email)}</div>
+        <div class="text-slate-700 font-medium">${esc(u.fullName || '')}${!u.fullName ? '<span class="text-amber-600 text-[11px] font-semibold"> (chưa cập nhật — bấm Sửa)</span>' : ''}</div>
+        <div class="text-xs text-slate-400">${esc(u.phone)} · ${esc(u.email)}</div>
       </td>
       <td class="px-5 py-3.5">
         <div class="text-slate-700">${esc(u.position)}</div>
@@ -148,6 +149,7 @@ function openUserModal(cccd) {
   if (!u) return;
   editingUserCccd = cccd;
   document.getElementById('mu-cccd').value = u.cccd;
+  document.getElementById('mu-fullname').value = u.fullName || ''; // R11
   document.getElementById('mu-phone').value = u.phone || '';
   document.getElementById('mu-email').value = u.email || '';
   document.getElementById('mu-position').value = u.position || '';
@@ -163,6 +165,7 @@ document.getElementById('form-user').addEventListener('submit', async (e) => {
   e.preventDefault();
   if (userFormBusy) return;
   const body = {
+    fullName: document.getElementById('mu-fullname').value.trim(), // R11: Họ và tên
     phone: document.getElementById('mu-phone').value.trim(),
     email: document.getElementById('mu-email').value.trim(),
     position: document.getElementById('mu-position').value.trim(),
@@ -692,19 +695,21 @@ function renderResults() {
 
   const tbody = document.getElementById('results-tbody');
   if (list.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="6" class="text-center text-slate-400 py-10">Chưa có bài thi nào trong hạng mục này.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="7" class="text-center text-slate-400 py-10">Chưa có bài thi nào trong hạng mục này.</td></tr>';
     return;
   }
   tbody.innerHTML = list.map((r, i) => {
     const user = cache.users.find((u) => u.cccd === r.cccd);
+    const fullName = r.fullName || (user && user.fullName) || '';
     const edited = r.editedAt ? `<span title="Đã chỉnh sửa bởi admin" class="ml-1">✎</span>` : '';
-    // R10: 3 thang điểm hiển thị đồng thời.
+    // R10: 3 thang điểm hiển thị đồng thời. R11: thời gian làm bài MILI GIÂY.
     const s = computeScales(r.correct, r.total, r);
     return `
       <tr class="hover:bg-slate-50/70">
-        <td class="px-5 py-3.5 text-slate-400 font-bold">${rankByScore ? (i + 1) : i + 1}</td>
-        <td class="px-5 py-3.5 font-mono font-semibold text-slate-800">${esc(r.cccd)}${edited}
-          <div class="text-[11px] text-slate-400 font-sans">${esc(user ? `${user.position} · ${user.unit}` : 'Tài khoản đã xóa')}</div>
+        <td class="px-5 py-3.5 text-slate-400 font-bold">${i + 1}</td>
+        <td class="px-5 py-3.5 font-semibold text-slate-800">${esc(fullName) || '<span class="text-amber-600 text-xs">chưa cập nhật</span>'}</td>
+        <td class="px-5 py-3.5 font-mono text-slate-600">${esc(r.cccd)}${edited}
+          <div class="text-[11px] text-slate-400 font-sans">${esc(r.userPosition || (user ? user.position : '') || '')} · ${esc(r.userUnit || (user ? user.unit : '') || '')}</div>
         </td>
         <td class="px-5 py-3.5">
           <div class="text-slate-700 font-medium">${esc(r.category)}</div>
@@ -714,7 +719,7 @@ function renderResults() {
           <span class="font-extrabold ${Number(s.score10) >= 5 ? 'text-emerald-600' : 'text-red-500'} text-base">${fmtScore(s.score10)}</span>
           <span class="text-[11px] text-slate-400">/10</span>
           <div class="text-[11px] text-slate-500 mt-0.5">Thang 100: <b>${fmtScore(s.score100)}</b> · Thang 60: <b>${fmtScore(s.score60)}</b></div>
-          <div class="text-[11px] text-slate-400">${r.correct}/${r.total} câu · ${fmtDuration(r.durationSeconds)}</div>
+          <div class="text-[11px] text-slate-400">${r.correct}/${r.total} câu · <span title="Giờ máy chủ ghi nhận — chính xác đến mili giây">${fmtDurationMs(r.durationMs, r.durationSeconds)}</span></div>
           ${r.note ? `<div class="text-[11px] text-amber-600 mt-0.5">Ghi chú: ${esc(r.note)}</div>` : ''}
         </td>
         <td class="px-5 py-3.5 text-xs text-slate-500">
@@ -741,9 +746,10 @@ function openResultModal(id) {
   const r = cache.results.find((x) => x.id === id);
   if (!r) return;
   editingResultId = id;
+  const user = cache.users.find((u) => u.cccd === r.cccd);
   document.getElementById('mr-info').innerHTML =
-    `Thí sinh: <b>${esc(r.cccd)}</b><br />Bài thi: <b>${esc(r.examTitle)}</b> (${esc(r.category)})<br />` +
-    `Nộp lúc: ${fmtDateTime(r.submittedAt)} · Thời lượng: ${fmtDuration(r.durationSeconds)}`;
+    `Thí sinh: <b>${esc(r.fullName || (user && user.fullName) || '(chưa cập nhật)')}</b> — ${esc(r.cccd)}<br />Bài thi: <b>${esc(r.examTitle)}</b> (${esc(r.category)})<br />` +
+    `Nộp lúc: ${fmtDateTime(r.submittedAt)} · Thời lượng: ${fmtDurationMs(r.durationMs, r.durationSeconds)}`;
   document.getElementById('mr-total').textContent = r.total;
   document.getElementById('mr-correct').value = r.correct;
   document.getElementById('mr-score').value = r.score;
@@ -814,13 +820,14 @@ async function renderTeams() {
       `<b class="text-flag-600">${fmtScore(t.avg10)}</b>/10 · <b class="text-flag-600">${fmtScore(t.avg100)}</b>/100 · <b class="text-flag-600">${fmtScore(t.avg60)}</b>/60`;
 
     if (data.teams.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="10" class="text-center text-slate-400 py-10">Chưa có dữ liệu.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="11" class="text-center text-slate-400 py-10">Chưa có dữ liệu.</td></tr>';
       return;
     }
     tbody.innerHTML = data.teams.map((tm) => {
       const medal = tm.rank === 1 ? '🥇' : tm.rank === 2 ? '🥈' : tm.rank === 3 ? '🥉' : '';
+      // R11 — 3 thành viên tốt nhất: hiển thị HỌ VÀ TÊN (CCCD che phần đầu).
       const top = (tm.topMembers || [])
-        .map((m) => `<span class="inline-block bg-slate-100 rounded-lg px-2 py-0.5 text-[11px] mr-1 mb-0.5" title="${esc(m.cccd)}">${esc(maskCccd(m.cccd))}: <b>${fmtScore(m.score10)}</b></span>`)
+        .map((m) => `<span class="inline-block bg-slate-100 rounded-lg px-2 py-0.5 text-[11px] mr-1 mb-0.5" title="${esc(m.cccd)} · ${fmtDurationMs(m.durMs)}">${esc(m.fullName || '(chưa cập nhật)')} (${esc(maskCccd(m.cccd))}): <b>${fmtScore(m.score10)}</b></span>`)
         .join('') || '<span class="text-slate-300 text-xs">—</span>';
       return `
         <tr class="hover:bg-slate-50/70 ${tm.excluded ? 'opacity-60' : ''}">
@@ -836,11 +843,12 @@ async function renderTeams() {
           <td class="px-3 py-3.5 text-center font-bold text-slate-700">${fmtScore(tm.avg100)}</td>
           <td class="px-3 py-3.5 text-center font-bold text-gold-600">${fmtScore(tm.avg60)}</td>
           <td class="px-3 py-3.5 text-center text-slate-600">${tm.participants ? fmtScore(tm.best10) : '—'}</td>
+          <td class="px-3 py-3.5 text-center font-bold ${Number(tm.perfect10) > 0 ? 'text-emerald-600' : 'text-slate-400'}" title="Số thành viên đạt ĐIỂM TUYỆT ĐỐI thang 10 — tiêu chí xét giải tập thể">${Number(tm.perfect10) || 0}</td>
           <td class="px-4 py-3.5">${top}</td>
         </tr>`;
     }).join('');
   } catch (err) {
-    tbody.innerHTML = `<tr><td colspan="10" class="text-center text-red-500 py-10">${esc(err.message)}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="11" class="text-center text-red-500 py-10">${esc(err.message)}</td></tr>`;
   }
 }
 
@@ -854,6 +862,87 @@ function printTeamBoard() {
   setTimeout(() => window.print(), 60);
 }
 window.addEventListener('afterprint', () => document.body.classList.remove('print-teams'));
+
+/* ==================== R11: XÉT THÀNH TÍCH & GIẢI THƯỞNG ==================== */
+let awardsExamFilter = ''; // '' = mặc định server (random30 nếu có kết quả)
+
+/** Thẻ kết quả giải tập thể — dùng cho 2 khối Khu vực / Phòng. */
+function teamAwardCard(w) {
+  return `
+    <div class="mt-2 rounded-xl bg-white/80 border border-slate-200 p-3">
+      <p class="font-bold text-slate-900">🏆 ${esc(w.unit)}${w.tie ? ' <span class="text-[10px] bg-gold-400/30 text-gold-700 font-bold px-2 py-0.5 rounded-full">ĐỒNG GIẢI</span>' : ''}</p>
+      <p class="text-xs text-slate-500 mt-1">Điểm TB: <b class="text-flag-600">${fmtScore(w.avg10)}</b>/10 · <b>${fmtScore(w.avg100)}</b>/100 · <b>${fmtScore(w.avg60)}</b>/60 · Tỷ lệ tham dự: <b>${w.participation}%</b> (${w.participants}/${w.registered}) · Số bài tuyệt đối thang 10: <b class="text-emerald-600">${Number(w.perfect10) || 0}</b></p>
+      <p class="text-[11px] text-slate-400 mt-0.5">Xét theo: điểm TB → tỷ lệ tham dự → số bài tuyệt đối; trùng cả 3 → đồng giải.</p>
+    </div>`;
+}
+
+async function renderAwards() {
+  const tbody = document.getElementById('awards-tbody');
+  const sel = document.getElementById('awards-exam-filter');
+  try {
+    const q = awardsExamFilter ? `?examId=${encodeURIComponent(awardsExamFilter)}` : '';
+    const data = await api(`/admin/awards${q}`);
+
+    // Bộ lọc hạng mục (đồng bộ lựa chọn hiện tại).
+    const current = sel.value;
+    const opts = ['<option value="">— Tất cả hạng mục (gộp mọi bài thi) —</option>']
+      .concat(cache.exams.map((e) => `<option value="${esc(e.id)}">${esc(e.title || e.id)}</option>`));
+    sel.innerHTML = opts.join('');
+    if ([...sel.options].some((o) => o.value === current)) sel.value = current;
+    else sel.value = data.examId === 'ALL' ? '' : data.examId;
+
+    // Chữ luật minh bạch.
+    document.getElementById('awards-rule-individual').textContent = 'Cá nhân: ' + (data.rules.individual || '');
+    document.getElementById('awards-rule-team').textContent = 'Tập thể: ' + (data.rules.team || '');
+
+    // 2 giải tập thể.
+    const kv = (data.teamAwards || []).find((g) => g.group === 'khu-vuc');
+    const ph = (data.teamAwards || []).find((g) => g.group === 'phong');
+    document.getElementById('award-team-kv').innerHTML =
+      (kv && kv.winners && kv.winners.length) ? kv.winners.map(teamAwardCard).join('') : '<p class="text-slate-400 text-xs mt-1">Chưa có đơn vị cấp Khu vực nào có bài dự thi trong hạng mục này.</p>';
+    document.getElementById('award-team-ph').innerHTML =
+      (ph && ph.winners && ph.winners.length) ? ph.winners.map(teamAwardCard).join('') : '<p class="text-slate-400 text-xs mt-1">Chưa có đơn vị cấp Phòng nào có bài dự thi trong hạng mục này.</p>';
+
+    // Bảng cá nhân.
+    if (!data.individual || data.individual.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="11" class="text-center text-slate-400 py-10">Chưa có bài thi nào để xét giải.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = data.individual.map((x) => {
+      const medal = x.rank === 1 ? '🥇' : x.rank === 2 ? '🥈' : x.rank === 3 ? '🥉' : '';
+      const prize = x.prize
+        ? `<span class="inline-block bg-gold-400/25 text-gold-700 font-bold text-[11px] px-2.5 py-1 rounded-full">${esc(x.prize)}</span>${x.tieGroup > 1 ? ' <span class="text-[10px] text-slate-400">(đồng hạng)</span>' : ''}`
+        : '<span class="text-slate-300 text-xs">—</span>';
+      return `
+        <tr class="hover:bg-slate-50/70">
+          <td class="px-4 py-3 font-extrabold text-slate-700">${x.rank} ${medal}</td>
+          <td class="px-4 py-3">${prize}</td>
+          <td class="px-4 py-3 font-semibold text-slate-800">${esc(x.fullName) || '<span class="text-amber-600 text-xs">chưa cập nhật</span>'}</td>
+          <td class="px-4 py-3 font-mono text-xs text-slate-500" title="${esc(x.cccd)}">${esc(maskCccd(x.cccd))}</td>
+          <td class="px-4 py-3 text-slate-600">${esc(x.unit)}</td>
+          <td class="px-3 py-3 text-center font-extrabold text-flag-600">${fmtScore(x.score10)}</td>
+          <td class="px-3 py-3 text-center font-bold text-slate-700">${fmtScore(x.score100)}</td>
+          <td class="px-3 py-3 text-center font-bold text-gold-600">${fmtScore(x.score60)}</td>
+          <td class="px-3 py-3 text-center text-slate-600">${x.correct}/${x.total}</td>
+          <td class="px-4 py-3 text-slate-700 whitespace-nowrap" title="Chính xác đến mili giây theo giờ máy chủ">⏱ ${fmtDurationMs(x.durationMs)}</td>
+          <td class="px-4 py-3 text-xs text-slate-500">${fmtDateTime(x.submittedAt)}</td>
+        </tr>`;
+    }).join('');
+  } catch (err) {
+    tbody.innerHTML = `<tr><td colspan="11" class="text-center text-red-500 py-10">${esc(err.message)}</td></tr>`;
+  }
+}
+
+document.getElementById('awards-exam-filter').addEventListener('change', (e) => {
+  awardsExamFilter = e.target.value;
+  renderAwards();
+});
+
+function printAwards() {
+  document.body.classList.add('print-awards');
+  setTimeout(() => window.print(), 60);
+}
+window.addEventListener('afterprint', () => document.body.classList.remove('print-awards'));
 
 /* ==================== R10: PHIẾU BÀI LÀM HOÀN CHỈNH ==================== */
 /** Xem & in toàn bộ bài làm của một thí sinh (đáp án đúng + lựa chọn thực tế). */
@@ -908,12 +997,12 @@ async function openPaperModal(resultId) {
     body.innerHTML = `
       <div class="rounded-2xl border border-slate-200 p-5 bg-slate-50/70">
         <div class="grid sm:grid-cols-2 gap-x-6 gap-y-1.5 text-sm">
-          <p>Thí sinh: <b>${esc(r.cccd)}</b>${u ? ` — ${esc(u.position || '')}` : ''}</p>
+          <p>Thí sinh: <b>${esc(u && u.fullName ? u.fullName : '(chưa cập nhật)')}</b> (${esc(r.cccd)})${u ? ` — ${esc(u.position || '')}` : ''}</p>
           <p>Đơn vị công tác: <b>${esc(u ? u.unit : 'Không rõ')}</b></p>
           <p>Bài thi: <b>${esc(r.examTitle)}</b></p>
           <p>Hạng mục: <b>${esc(r.category)}</b></p>
           <p>Nộp lúc: <b>${fmtDateTime(r.submittedAt)}</b></p>
-          <p>Thời lượng: <b>${fmtDuration(r.durationSeconds)}</b></p>
+          <p>Thời lượng: <b>${fmtDurationMs(r.durationMs, r.durationSeconds)}</b> <span class="text-[10px] text-slate-400">(giờ máy chủ — chính xác mili giây)</span></p>
         </div>
         <div class="mt-4 grid grid-cols-3 gap-3 text-center">
           <div class="rounded-xl border-2 border-flag-500 bg-white py-3"><p class="text-[10px] font-bold uppercase text-flag-700">Thang 10</p><p class="text-2xl font-extrabold text-flag-600">${fmtScore(s.score10)}</p></div>

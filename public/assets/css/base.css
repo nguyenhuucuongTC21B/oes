@@ -83,6 +83,13 @@ details.faq[open] .faq-chevron { transform: rotate(180deg); }
   body.print-teams .admin-section:not(#section-teams),
   body.print-teams .no-print { display: none !important; }
   body.print-teams .admin-section { display: block !important; }
-  body.print-paper, body.print-teams { background: #fff !important; }
+  /* R11 — Biên bản xét giải thưởng: in gọn section-awards. */
+  body.print-awards header,
+  body.print-awards nav,
+  body.print-awards #sync-banner,
+  body.print-awards .admin-section:not(#section-awards),
+  body.print-awards .no-print { display: none !important; }
+  body.print-awards .admin-section { display: block !important; }
+  body.print-paper, body.print-teams, body.print-awards { background: #fff !important; }
   .paper-q { break-inside: avoid; page-break-inside: avoid; }
 }
